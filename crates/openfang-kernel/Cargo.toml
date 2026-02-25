@@ -33,6 +33,9 @@ rand = { workspace = true }
 hex = { workspace = true }
 reqwest = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 tokio-test = { workspace = true }
 tempfile = { workspace = true }
