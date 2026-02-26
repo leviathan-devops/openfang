@@ -33,10 +33,6 @@ max_summary_tokens = 1024
 [channels.discord]
 bot_token_env = "DISCORD_BOT_TOKEN"
 guild_ids = ["1475947548811202613"]
-
-[channels.discord.overrides]
-dm_policy = "all"
-group_policy = "all"
 TOML
 
 ENV RUST_BACKTRACE=1
@@ -44,3 +40,4 @@ EXPOSE 4200
 
 # Write config with real PORT at startup, init (skips if config exists), then start
 CMD ["/bin/sh", "-c", "PORT_VAL=${PORT:-4200} && sed \"s/PORT_PLACEHOLDER/$PORT_VAL/\" /root/.openfang/config.toml.template > /root/.openfang/config.toml && openfang init --quick && openfang start"]
+
