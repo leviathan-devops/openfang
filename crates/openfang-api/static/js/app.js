@@ -154,7 +154,7 @@ document.addEventListener('alpine:init', function() {
 function app() {
   return {
     page: 'agents',
-    theme: localStorage.getItem('openfang-theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
+    theme: localStorage.getItem('openfang-theme') || 'light',
     sidebarCollapsed: localStorage.getItem('openfang-sidebar') === 'collapsed',
     mobileMenuOpen: false,
     connected: false,

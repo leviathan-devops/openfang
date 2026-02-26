@@ -6,29 +6,29 @@
 
 use ratatui::style::{Color, Modifier, Style};
 
-// ── Core Palette (from landing page globals.css) ────────────────────────────
+// ── Core Palette (dark mode for terminal) ───────────────────────────────────
 
 pub const ACCENT: Color = Color::Rgb(255, 92, 0); // #FF5C00 — OpenFang orange
 pub const ACCENT_DIM: Color = Color::Rgb(224, 82, 0); // #E05200
 
-pub const BG_PRIMARY: Color = Color::Rgb(237, 236, 235); // #EDECEB — light mode
-pub const BG_CARD: Color = Color::Rgb(255, 255, 255); // #FFFFFF — white surface
-pub const BG_HOVER: Color = Color::Rgb(240, 238, 236); // #F0EEEC
-pub const BG_CODE: Color = Color::Rgb(232, 230, 227); // #E8E6E3
+pub const BG_PRIMARY: Color = Color::Rgb(15, 14, 14); // #0F0E0E — dark background
+pub const BG_CARD: Color = Color::Rgb(31, 29, 28); // #1F1D1C — dark surface
+pub const BG_HOVER: Color = Color::Rgb(42, 39, 37); // #2A2725 — dark hover
+pub const BG_CODE: Color = Color::Rgb(24, 22, 21); // #181615 — dark code block
 
-pub const TEXT_PRIMARY: Color = Color::Rgb(26, 24, 23); // #1A1817 — dark text on light bg
-pub const TEXT_SECONDARY: Color = Color::Rgb(61, 57, 53); // #3D3935 — WCAG AA pass
-pub const TEXT_TERTIARY: Color = Color::Rgb(107, 101, 96); // #6B6560 — WCAG AA pass
+pub const TEXT_PRIMARY: Color = Color::Rgb(240, 239, 238); // #F0EFEE — light text on dark bg
+pub const TEXT_SECONDARY: Color = Color::Rgb(168, 162, 158); // #A8A29E — muted text
+pub const TEXT_TERTIARY: Color = Color::Rgb(120, 113, 108); // #78716C — dim text
 
-pub const BORDER: Color = Color::Rgb(213, 210, 207); // #D5D2CF — light border
+pub const BORDER: Color = Color::Rgb(63, 59, 56); // #3F3B38 — dark border
 
-// ── Semantic Colors (darker variants for light background contrast) ─────────
+// ── Semantic Colors (brighter variants for dark background contrast) ────────
 
-pub const GREEN: Color = Color::Rgb(22, 163, 74); // #16A34A — success
-pub const BLUE: Color = Color::Rgb(37, 99, 235); // #2563EB — info
-pub const YELLOW: Color = Color::Rgb(217, 119, 6); // #D97706 — warning
-pub const RED: Color = Color::Rgb(220, 38, 38); // #DC2626 — error
-pub const PURPLE: Color = Color::Rgb(147, 51, 234); // #9333EA — decorators
+pub const GREEN: Color = Color::Rgb(34, 197, 94); // #22C55E — success
+pub const BLUE: Color = Color::Rgb(59, 130, 246); // #3B82F6 — info
+pub const YELLOW: Color = Color::Rgb(234, 179, 8); // #EAB308 — warning
+pub const RED: Color = Color::Rgb(239, 68, 68); // #EF4444 — error
+pub const PURPLE: Color = Color::Rgb(168, 85, 247); // #A855F7 — decorators
 
 // ── Backward-compat aliases ─────────────────────────────────────────────────
 
