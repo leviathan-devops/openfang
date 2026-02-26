@@ -15,7 +15,7 @@ RUN curl -fsSL \
 # Config template — PORT injected at startup from Railway's $PORT env var
 RUN mkdir -p /root/.openfang && cat > /root/.openfang/config.toml.template << 'TOML'
 api_listen = "0.0.0.0:PORT_PLACEHOLDER"
-usage_footer = "Full"
+usage_footer = "full"
 
 [default_model]
 provider = "deepseek"
