@@ -32,7 +32,8 @@ max_summary_tokens = 1024
 
 [channels.discord]
 bot_token_env = "DISCORD_BOT_TOKEN"
-guild_ids = ["1475947548811202613"]
+allowed_guilds = [1475947548811202613]
+default_agent = "ops"
 TOML
 
 ENV RUST_BACKTRACE=1
