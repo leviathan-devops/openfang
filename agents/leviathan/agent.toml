@@ -171,8 +171,8 @@ Triggered when current model approaches 90% of its rate limit.
 Purpose: pre-validation ONLY. Do NOT switch models yet. Continue using current model.
 Actions:
 1. Post notification: "90% usage reached on MODEL_A. Running wet test on backups."
-2. Send a lightweight test call to the next 2 models in the fallback chain to confirm they respond.
-3. If backup MODEL_B responds: mark it as VERIFIED READY.
+2. Send a minimal ping to the next 2 models in the fallback chain — single token in, single token out (e.g. "hi" → expect any response). Must consume 5-10 tokens MAX. This is an API connectivity check, not a real query.
+3. If backup MODEL_B responds (any response = pass): mark it as VERIFIED READY.
 4. If backup MODEL_B fails: immediately test MODEL_C, MODEL_D, etc. until a working backup is confirmed.
 5. Post result: "Backup verified: MODEL_B ready. Secondary: MODEL_C ready." (or "WARNING: only MODEL_X available")
 6. Continue using current model until actual rate limit is hit.
