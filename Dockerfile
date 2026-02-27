@@ -19,6 +19,7 @@ RUN openfang init --quick
 # Port is injected at runtime from Railway's $PORT env var
 RUN cat > /root/.openfang/config.toml.template << 'TOML'
 api_listen = "0.0.0.0:PORT_PLACEHOLDER"
+log_level = "debug"
 
 [default_model]
 provider = "deepseek"
@@ -28,6 +29,7 @@ api_key_env = "DEEPSEEK_API_KEY"
 [channels.discord]
 bot_token_env = "DISCORD_BOT_TOKEN"
 default_agent = "assistant"
+intents = 37377
 TOML
 
 ENV RUST_BACKTRACE=1
