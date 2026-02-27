@@ -79,20 +79,56 @@ PORT_VAL=${PORT:-4200}
 sed "s/PORT_PLACEHOLDER/$PORT_VAL/" /root/.openfang/config.toml.template > /root/.openfang/config.toml
 
 # Ensure persistent volume directories exist (Railway volume mounted at /data)
-mkdir -p /data/knowledge /data/logs /data/backups
+mkdir -p /data/knowledge /data/logs /data/backups /data/github-sync
 
 # Symlink OpenFang's default data directory to persistent volume
-# This ensures ALL OpenFang state survives redeploys
 ln -sf /data /root/.openfang/data 2>/dev/null || true
 
-# Backup memory DB on startup (if exists) for safety
+# SQLite WAL mode + integrity check on boot
 if [ -f /data/memory.db ]; then
-  cp /data/memory.db "/data/backups/memory_$(date +%Y%m%d_%H%M%S).db" 2>/dev/null || true
-  # Keep only last 10 backups
-  ls -t /data/backups/memory_*.db 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
-  echo "Memory DB loaded from persistent volume ($(du -h /data/memory.db | cut -f1))"
+  # Enable WAL mode for concurrent read/write safety (CTO + Neural Net)
+  python3 -c "
+import sqlite3, sys, shutil, os
+from datetime import datetime
+db = '/data/memory.db'
+try:
+    conn = sqlite3.connect(db)
+    # Enable WAL mode — allows concurrent readers + single writer without locks
+    conn.execute('PRAGMA journal_mode=WAL;')
+    # Quick integrity check
+    result = conn.execute('PRAGMA integrity_check;').fetchone()[0]
+    if result == 'ok':
+        print(f'Memory DB healthy ({os.path.getsize(db)//1024}KB), WAL mode enabled')
+        # Verified backup — only back up HEALTHY databases
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        shutil.copy2(db, f'/data/backups/memory_{ts}_verified.db')
+    else:
+        print(f'WARNING: Memory DB integrity check failed: {result}', file=sys.stderr)
+        # Try to recover from last verified backup
+        import glob
+        backups = sorted(glob.glob('/data/backups/memory_*_verified.db'), reverse=True)
+        if backups:
+            print(f'Restoring from last verified backup: {backups[0]}')
+            shutil.copy2(backups[0], db)
+        else:
+            print('CRITICAL: No verified backups available. Starting fresh.', file=sys.stderr)
+            os.rename(db, f'/data/backups/memory_corrupted_{ts}.db')
+    conn.close()
+except Exception as e:
+    print(f'Memory DB error: {e}', file=sys.stderr)
+"
+  # Keep last 20 verified backups (rotate old ones)
+  ls -t /data/backups/memory_*_verified.db 2>/dev/null | tail -n +21 | xargs rm -f 2>/dev/null || true
 else
   echo "No existing memory DB — fresh start on persistent volume"
+  # Pre-initialize with WAL mode
+  python3 -c "
+import sqlite3
+conn = sqlite3.connect('/data/memory.db')
+conn.execute('PRAGMA journal_mode=WAL;')
+conn.close()
+print('Fresh memory DB created with WAL mode')
+"
 fi
 
 # Start OpenFang in background
