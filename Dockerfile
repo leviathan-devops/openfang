@@ -1,7 +1,7 @@
 # Leviathan DevOps — OpenFang v0.1.3
-# Phase 3: Leviathan CTO with full intelligence architecture
-# Identity: Leviathan CTO = Chief Technology Officer of Leviathan Cloud
-# Context Engineering + GSD Framework + Memory Architecture + Sub-Agent OS hardwired
+# Phase 4: Dual-agent architecture — CTO (Opus) + Neural Net (Sonnet)
+# CTO = conscious reasoning, full autonomy, primary interface
+# Neural Net = subconscious, server-hardwired background process, monitoring + assist
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y ca-certificates curl libssl3 libsqlite3-0 && rm -rf /var/lib/apt/lists/*
@@ -17,8 +17,9 @@ RUN curl -fsSL \
 # Initialize OpenFang directory structure
 RUN openfang init --quick
 
-# Copy custom Leviathan agent manifest
+# Copy agent manifests — CTO (primary) + Neural Net (subconscious)
 COPY agents/leviathan/agent.toml /root/.openfang/agents/leviathan/agent.toml
+COPY agents/neural-net/agent.toml /root/.openfang/agents/neural-net/agent.toml
 
 # Full Leviathan config — DeepSeek V3 primary, OpenRouter + Groq fallbacks
 # Port injected at runtime from Railway's $PORT env var
