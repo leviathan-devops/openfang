@@ -19,6 +19,7 @@ RUN openfang init --quick
 # Port is injected at runtime from Railway's $PORT env var
 RUN cat > /root/.openfang/config.toml.template << 'TOML'
 api_listen = "0.0.0.0:PORT_PLACEHOLDER"
+api_key = "leviathan-test-key-2026"
 log_level = "debug"
 
 [default_model]
