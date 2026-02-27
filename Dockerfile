@@ -4,7 +4,7 @@
 # Neural Net = subconscious, server-hardwired background process, monitoring + assist
 FROM debian:bookworm-slim
 
-RUN apt-get update && apt-get install -y ca-certificates curl libssl3 libsqlite3-0 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ca-certificates curl libssl3 libsqlite3-0 python3 && rm -rf /var/lib/apt/lists/*
 
 # Download OpenFang v0.1.3 release binary (latest — released 2026-02-26)
 RUN curl -fsSL \
@@ -65,4 +65,35 @@ TOML
 ENV RUST_BACKTRACE=1
 EXPOSE 4200
 
-CMD ["/bin/sh", "-c", "PORT_VAL=${PORT:-4200} && sed \"s/PORT_PLACEHOLDER/$PORT_VAL/\" /root/.openfang/config.toml.template > /root/.openfang/config.toml && openfang start"]
+# Startup script: inject port, start OpenFang, then auto-spawn neural-net after boot
+RUN cat > /root/start.sh << 'SCRIPT'
+#!/bin/sh
+PORT_VAL=${PORT:-4200}
+sed "s/PORT_PLACEHOLDER/$PORT_VAL/" /root/.openfang/config.toml.template > /root/.openfang/config.toml
+
+# Start OpenFang in background
+openfang start &
+OPENFANG_PID=$!
+
+# Wait for API to be ready (max 30s)
+for i in $(seq 1 30); do
+  if curl -sf http://localhost:$PORT_VAL/api/health > /dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+
+# Auto-spawn neural-net agent from its manifest
+NEURAL_NET_TOML=$(cat /root/.openfang/agents/neural-net/agent.toml)
+curl -sf -X POST "http://localhost:$PORT_VAL/api/agents" \
+  -H "Authorization: Bearer leviathan-test-key-2026" \
+  -H "Content-Type: application/json" \
+  -d "{\"manifest_toml\": $(echo "$NEURAL_NET_TOML" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')}" \
+  > /dev/null 2>&1 && echo "Neural Net spawned" || echo "Neural Net spawn failed (will retry)"
+
+# Foreground the main process
+wait $OPENFANG_PID
+SCRIPT
+RUN chmod +x /root/start.sh
+
+CMD ["/root/start.sh"]
