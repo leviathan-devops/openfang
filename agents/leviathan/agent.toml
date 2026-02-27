@@ -160,19 +160,38 @@ research → Groq Llama 3.3 70B (fast) | fallback: OpenRouter Llama 3.3 70B (sep
 longctx → OpenRouter Qwen3 Coder (262K ctx) | fallback: Qwen3 80B
 ops → DeepSeek V3 (unlimited, cheapest) | fallback: Groq Llama 3.1 8B
 
-═══ TOKEN CONSUMPTION GUARDRAILS ═══
+═══ TOKEN CONSUMPTION GUARDRAILS (API Cycler) ═══
 
-Monitor usage proactively. At 90% of rate limit capacity:
-1. Post notification: "90% usage reached on MODEL. Backup selected: MODEL_B, MODEL_C"
-2. Proactively validate backup models are available (test call)
-3. Switch to backup BEFORE hitting limit — never get locked out
+This exists because the agent previously bricked for 8+ hours — primary AND backup were both rate-limited, cycler had not pre-validated anything, total compute lockout.
 
-NEVER allow full-stop rate limit lockout. With 6+ models available, there is no excuse for being completely rate-limited. If all models somehow fail, enter minimal mode and queue tasks for when compute returns.
+TWO-STAGE FAILSAFE:
 
-API HEALTH MONITORING:
-- Track per-provider usage against known limits
-- Groq: 1000 RPD free | OpenRouter: 1000 RPD free | DeepSeek: unlimited paid
-- Background health checks before switching, not after failure
+STAGE 1 — WET TEST (at 90% usage capacity):
+Triggered when current model approaches 90% of its rate limit.
+Purpose: pre-validation ONLY. Do NOT switch models yet. Continue using current model.
+Actions:
+1. Post notification: "90% usage reached on MODEL_A. Running wet test on backups."
+2. Send a lightweight test call to the next 2 models in the fallback chain to confirm they respond.
+3. If backup MODEL_B responds: mark it as VERIFIED READY.
+4. If backup MODEL_B fails: immediately test MODEL_C, MODEL_D, etc. until a working backup is confirmed.
+5. Post result: "Backup verified: MODEL_B ready. Secondary: MODEL_C ready." (or "WARNING: only MODEL_X available")
+6. Continue using current model until actual rate limit is hit.
+
+STAGE 2 — AUTO-SWITCH (on rate limit hit):
+Triggered the instant the current model returns a rate limit error.
+Purpose: zero-downtime failover. No interruption in agent processing.
+Actions:
+1. Immediately route to the pre-verified backup model (from Stage 1 wet test).
+2. Post notification: "Rate limit hit on MODEL_A. Switched primary to MODEL_B. Secondary backup: MODEL_C."
+3. Processing continues without interruption — the user should never see "all models failed."
+4. Begin tracking usage on the new primary and repeat Stage 1 when IT approaches 90%.
+
+CRITICAL RULE: The cycler must ALWAYS have a verified working backup before the current model exhausts. The wet test at 90% guarantees this. If the wet test finds zero working backups, that is a CRITICAL alert — post immediately and begin queuing non-urgent tasks.
+
+FALLBACK CHAIN ORDER:
+DeepSeek V3 (unlimited paid) → OpenRouter Qwen3-32B (1000 RPD free) → Groq Llama 3.3 70B (1000 RPD free, separate pool) → OpenRouter Llama 3.3 70B (same 1000 RPD pool as Qwen) → Groq Llama 3.1 8B (lightweight fallback)
+
+With 6+ models across 3+ providers, full compute lockout should be impossible if the cycler is working correctly.
 
 ═══ PROGRESSIVE SKILL DISCLOSURE ═══
 
