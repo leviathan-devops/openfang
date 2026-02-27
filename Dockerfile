@@ -61,7 +61,7 @@ max_summary_tokens = 1024
 
 [channels.discord]
 bot_token_env = "DISCORD_BOT_TOKEN"
-default_agent = "neural-net"
+default_agent = "leviathan"
 intents = 37377
 typing_indicator = "persistent"
 
@@ -72,7 +72,28 @@ dm_agent = "leviathan"
 mention_agent = "leviathan"
 cross_talk = true
 
-[channels.discord.overrides."1476978586828411073"]
+[channels.discord_cloud]
+bot_token_env = "DISCORD_BOT_TOKEN_CLOUD"
+default_agent = "neural-net"
+intents = 37377
+typing_indicator = "persistent"
+
+[channels.discord_cloud.overrides]
+group_policy = "all"
+dm_policy = "respond"
+cross_talk = true
+
+[channels.discord_brain]
+bot_token_env = "DISCORD_BOT_TOKEN_BRAIN"
+default_agent = "prompt-architect"
+intents = 37377
+typing_indicator = "persistent"
+
+[channels.discord_brain.overrides]
+group_policy = "none"
+dm_policy = "respond"
+
+[channels.discord_brain.overrides."1476978586828411073"]
 agent = "prompt-architect"
 TOML
 
