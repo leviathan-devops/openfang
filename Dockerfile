@@ -1,7 +1,8 @@
 # Leviathan DevOps — OpenFang v0.1.3
-# Phase 4: Dual-agent architecture — CTO (Opus) + Neural Net (Sonnet)
+# Phase 4: Triple-agent architecture — CTO + Neural Net + Prompt Architect
 # CTO = conscious reasoning, full autonomy, primary interface
-# Neural Net = subconscious, server-hardwired background process, monitoring + assist
+# Neural Net = subconscious, server-hardwired background process, executive layer
+# Prompt Architect = DeepSeek R1 reasoning engine, meta-prompting refinement
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y ca-certificates curl libssl3 libsqlite3-0 python3 && rm -rf /var/lib/apt/lists/*
@@ -17,9 +18,10 @@ RUN curl -fsSL \
 # Initialize OpenFang directory structure
 RUN openfang init --quick
 
-# Copy agent manifests — CTO (primary) + Neural Net (subconscious)
+# Copy agent manifests — CTO (primary) + Neural Net (executive) + Prompt Architect (meta-prompting)
 COPY agents/leviathan/agent.toml /root/.openfang/agents/leviathan/agent.toml
 COPY agents/neural-net/agent.toml /root/.openfang/agents/neural-net/agent.toml
+COPY agents/prompt-architect/agent.toml /root/.openfang/agents/prompt-architect/agent.toml
 
 # Full Leviathan config — DeepSeek V3 primary, OpenRouter + Groq fallbacks
 # Port injected at runtime from Railway's $PORT env var
@@ -60,6 +62,9 @@ intents = 37377
 [channels.discord.overrides]
 group_policy = "all"
 dm_policy = "respond"
+
+[channels.discord.overrides."1476978586828411073"]
+agent = "prompt-architect"
 TOML
 
 ENV RUST_BACKTRACE=1
@@ -90,6 +95,14 @@ curl -sf -X POST "http://localhost:$PORT_VAL/api/agents" \
   -H "Content-Type: application/json" \
   -d "{\"manifest_toml\": $(echo "$NEURAL_NET_TOML" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')}" \
   > /dev/null 2>&1 && echo "Neural Net spawned" || echo "Neural Net spawn failed (will retry)"
+
+# Auto-spawn prompt-architect agent from its manifest
+PROMPT_ARCH_TOML=$(cat /root/.openfang/agents/prompt-architect/agent.toml)
+curl -sf -X POST "http://localhost:$PORT_VAL/api/agents" \
+  -H "Authorization: Bearer leviathan-test-key-2026" \
+  -H "Content-Type: application/json" \
+  -d "{\"manifest_toml\": $(echo "$PROMPT_ARCH_TOML" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')}" \
+  > /dev/null 2>&1 && echo "Prompt Architect spawned" || echo "Prompt Architect spawn failed (will retry)"
 
 # Foreground the main process
 wait $OPENFANG_PID
