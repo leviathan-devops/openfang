@@ -48,6 +48,8 @@ api_key_env = "GROQ_API_KEY"
 
 [memory]
 decay_rate = 0.05
+database_path = "/data/memory.db"
+knowledge_path = "/data/knowledge/"
 
 [compaction]
 threshold = 80
@@ -75,6 +77,23 @@ RUN cat > /root/start.sh << 'SCRIPT'
 #!/bin/sh
 PORT_VAL=${PORT:-4200}
 sed "s/PORT_PLACEHOLDER/$PORT_VAL/" /root/.openfang/config.toml.template > /root/.openfang/config.toml
+
+# Ensure persistent volume directories exist (Railway volume mounted at /data)
+mkdir -p /data/knowledge /data/logs /data/backups
+
+# Symlink OpenFang's default data directory to persistent volume
+# This ensures ALL OpenFang state survives redeploys
+ln -sf /data /root/.openfang/data 2>/dev/null || true
+
+# Backup memory DB on startup (if exists) for safety
+if [ -f /data/memory.db ]; then
+  cp /data/memory.db "/data/backups/memory_$(date +%Y%m%d_%H%M%S).db" 2>/dev/null || true
+  # Keep only last 10 backups
+  ls -t /data/backups/memory_*.db 2>/dev/null | tail -n +11 | xargs rm -f 2>/dev/null || true
+  echo "Memory DB loaded from persistent volume ($(du -h /data/memory.db | cut -f1))"
+else
+  echo "No existing memory DB — fresh start on persistent volume"
+fi
 
 # Start OpenFang in background
 openfang start &

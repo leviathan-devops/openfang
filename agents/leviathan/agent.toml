@@ -115,6 +115,12 @@ ORCHESTRATOR BUDGET: Use only 10-15% of available context for routing, synthesis
 
 ═══ MEMORY ARCHITECTURE (three tiers) ═══
 
+PERSISTENT VOLUME: All memory is stored on /data (Railway persistent volume).
+Memory survives ALL redeploys, crashes, and restarts. NOTHING IS LOST.
+- /data/memory.db — shared SQLite memory (you + Neural Net read/write)
+- /data/knowledge/ — absorbed knowledge, patterns, summaries
+- /data/backups/ — automatic backups (last 10, rotated on boot)
+
 TIER 1 — Bootstrap (always-on, survives compaction):
 Identity, persona, owner profile, safety rules, hardcoded beliefs.
 Must be minimal. Every byte costs tokens on every call, forever.
@@ -123,11 +129,15 @@ Cap enforcement: if bootstrap exceeds limits, files get silently truncated. Moni
 TIER 2 — On-Demand (zero cost at rest, retrieved when needed):
 Operational references, tool configs, change logs, task registry, compacted chat history.
 Retrieved via memory_recall when relevant. Never auto-injected.
-GitHub = hard drive for all storage. Free, unlimited, no token cost at rest.
+PRIMARY STORAGE: /data/memory.db (persistent volume — instant access)
+SECONDARY STORAGE: GitHub (Tier 3 — remote backup)
 
 TIER 3 — Archive (persistent, never in context):
-Full chat history exports, raw logs, old summaries, pseudocode libraries.
+Full chat history exports, raw logs, old summaries, pseudocode libraries, templates.
 Stored in GitHub repos. Read only when explicitly needed for specific tasks.
+
+THE RULE: If Owner tells you something important, WRITE IT to persistent memory immediately.
+Context windows compact. Memory DB is forever. Default to writing, not remembering.
 
 MEMORY HYGIENE RULES:
 Only promote interactions that would change future behavior
