@@ -52,6 +52,8 @@ struct OaiMessage {
     tool_calls: Option<Vec<OaiToolCall>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tool_call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_content: Option<String>,
 }
 
 /// Content can be a plain string or an array of content parts (for images).
@@ -141,6 +143,7 @@ impl LlmDriver for OpenAIDriver {
                 content: Some(OaiMessageContent::Text(system.clone())),
                 tool_calls: None,
                 tool_call_id: None,
+                reasoning_content: None,
             });
         }
 
@@ -154,6 +157,7 @@ impl LlmDriver for OpenAIDriver {
                             content: Some(OaiMessageContent::Text(text.clone())),
                             tool_calls: None,
                             tool_call_id: None,
+                            reasoning_content: None,
                         });
                     }
                 }
@@ -163,6 +167,7 @@ impl LlmDriver for OpenAIDriver {
                         content: Some(OaiMessageContent::Text(text.clone())),
                         tool_calls: None,
                         tool_call_id: None,
+                        reasoning_content: None,
                     });
                 }
                 (Role::Assistant, MessageContent::Text(text)) => {
@@ -171,6 +176,7 @@ impl LlmDriver for OpenAIDriver {
                         content: Some(OaiMessageContent::Text(text.clone())),
                         tool_calls: None,
                         tool_call_id: None,
+                        reasoning_content: None,
                     });
                 }
                 (Role::User, MessageContent::Blocks(blocks)) => {
@@ -190,6 +196,7 @@ impl LlmDriver for OpenAIDriver {
                                     content: Some(OaiMessageContent::Text(content.clone())),
                                     tool_calls: None,
                                     tool_call_id: Some(tool_use_id.clone()),
+                                    reasoning_content: None,
                                 });
                             }
                             ContentBlock::Text { text } => {
@@ -212,11 +219,13 @@ impl LlmDriver for OpenAIDriver {
                             content: Some(OaiMessageContent::Parts(parts)),
                             tool_calls: None,
                             tool_call_id: None,
+                            reasoning_content: None,
                         });
                     }
                 }
                 (Role::Assistant, MessageContent::Blocks(blocks)) => {
                     let mut text_parts = Vec::new();
+                    let mut thinking_parts = Vec::new();
                     let mut tool_calls = Vec::new();
                     for block in blocks {
                         match block {
@@ -231,7 +240,9 @@ impl LlmDriver for OpenAIDriver {
                                     },
                                 });
                             }
-                            ContentBlock::Thinking { .. } => {}
+                            ContentBlock::Thinking { thinking } => {
+                                thinking_parts.push(thinking.clone());
+                            }
                             _ => {}
                         }
                     }
@@ -248,6 +259,11 @@ impl LlmDriver for OpenAIDriver {
                             Some(tool_calls)
                         },
                         tool_call_id: None,
+                        reasoning_content: if thinking_parts.is_empty() {
+                            None
+                        } else {
+                            Some(thinking_parts.join("\n\n"))
+                        },
                     });
                 }
                 _ => {}
@@ -446,6 +462,7 @@ impl LlmDriver for OpenAIDriver {
                 content: Some(OaiMessageContent::Text(system.clone())),
                 tool_calls: None,
                 tool_call_id: None,
+                reasoning_content: None,
             });
         }
 
@@ -458,6 +475,7 @@ impl LlmDriver for OpenAIDriver {
                             content: Some(OaiMessageContent::Text(text.clone())),
                             tool_calls: None,
                             tool_call_id: None,
+                            reasoning_content: None,
                         });
                     }
                 }
@@ -467,6 +485,7 @@ impl LlmDriver for OpenAIDriver {
                         content: Some(OaiMessageContent::Text(text.clone())),
                         tool_calls: None,
                         tool_call_id: None,
+                        reasoning_content: None,
                     });
                 }
                 (Role::Assistant, MessageContent::Text(text)) => {
@@ -475,6 +494,7 @@ impl LlmDriver for OpenAIDriver {
                         content: Some(OaiMessageContent::Text(text.clone())),
                         tool_calls: None,
                         tool_call_id: None,
+                        reasoning_content: None,
                     });
                 }
                 (Role::User, MessageContent::Blocks(blocks)) => {
@@ -490,6 +510,7 @@ impl LlmDriver for OpenAIDriver {
                                 content: Some(OaiMessageContent::Text(content.clone())),
                                 tool_calls: None,
                                 tool_call_id: Some(tool_use_id.clone()),
+                                reasoning_content: None,
                             });
                         }
                     }
@@ -497,6 +518,7 @@ impl LlmDriver for OpenAIDriver {
                 (Role::Assistant, MessageContent::Blocks(blocks)) => {
                     let mut text_parts = Vec::new();
                     let mut tool_calls_out = Vec::new();
+                    let mut thinking_parts = Vec::new();
                     for block in blocks {
                         match block {
                             ContentBlock::Text { text } => text_parts.push(text.clone()),
@@ -510,7 +532,9 @@ impl LlmDriver for OpenAIDriver {
                                     },
                                 });
                             }
-                            ContentBlock::Thinking { .. } => {}
+                            ContentBlock::Thinking { thinking } => {
+                                thinking_parts.push(thinking.clone());
+                            }
                             _ => {}
                         }
                     }
@@ -527,6 +551,11 @@ impl LlmDriver for OpenAIDriver {
                             Some(tool_calls_out)
                         },
                         tool_call_id: None,
+                        reasoning_content: if thinking_parts.is_empty() {
+                            None
+                        } else {
+                            Some(thinking_parts.join("\n\n"))
+                        },
                     });
                 }
                 _ => {}
