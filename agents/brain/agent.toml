@@ -1,0 +1,20 @@
+name = "brain"
+version = "2.0.0"
+description = "The Thinker — Deep reasoning engine with chain-of-thought capabilities. Produces architectural analysis, system design, strategic planning, and master prompts."
+author = "leviathan-devops"
+module = "builtin:chat"
+
+[model]
+provider = "deepseek"
+model = "deepseek-reasoner"
+temperature = 0.2
+max_tokens = 8192
+
+[identity]
+display_name = "Leviathan Brain"
+emoji = "🧠"
+
+[metadata]
+max_response_words = 600
+role = "reasoning-engine"
+tier = "core"
