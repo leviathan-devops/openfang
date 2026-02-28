@@ -1,5 +1,15 @@
 <body x-data="app" :data-theme="theme">
 
+<!-- API Key Auth Prompt -->
+<div x-show="$store.app.showAuthPrompt" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px)" x-data="{ apiKeyInput: '' }">
+  <div style="background:var(--bg-card,#1e1e2e);border:1px solid var(--border,#333);border-radius:12px;padding:2rem;max-width:400px;width:90%">
+    <h3 style="margin:0 0 0.5rem;font-size:1.1rem">API Key Required</h3>
+    <p style="color:var(--text-dim,#888);font-size:0.85rem;margin:0 0 1rem">This instance requires an API key. Enter the key from your <code>config.toml</code>.</p>
+    <input type="password" x-model="apiKeyInput" placeholder="Enter API key..." @keydown.enter="$store.app.submitApiKey(apiKeyInput)" style="width:100%;padding:0.6rem;border-radius:6px;border:1px solid var(--border,#333);background:var(--bg-input,#151520);color:var(--text,#e0e0e0);font-size:0.9rem;box-sizing:border-box;margin-bottom:0.75rem">
+    <button @click="$store.app.submitApiKey(apiKeyInput)" style="width:100%;padding:0.6rem;border-radius:6px;border:none;background:var(--accent,#7c3aed);color:#fff;font-weight:600;cursor:pointer;font-size:0.9rem">Unlock Dashboard</button>
+  </div>
+</div>
+
 <div class="app-layout" :class="{ 'focus-mode': $store.app.focusMode }">
   <!-- Sidebar -->
   <nav class="sidebar" :class="{ collapsed: sidebarCollapsed, 'mobile-open': mobileMenuOpen }">
@@ -13,7 +23,11 @@
           </div>
         </div>
       </div>
-      <button class="theme-toggle" @click="toggleTheme()" :title="theme === 'dark' ? 'Switch to light' : 'Switch to dark'" x-text="theme === 'dark' ? '\u2600' : '\u263E'"></button>
+      <div class="theme-switcher">
+        <button class="theme-opt" :class="{ active: themeMode === 'light' }" @click="setTheme('light')" title="Light">&#9788;</button>
+        <button class="theme-opt" :class="{ active: themeMode === 'system' }" @click="setTheme('system')" title="System">&#9675;</button>
+        <button class="theme-opt" :class="{ active: themeMode === 'dark' }" @click="setTheme('dark')" title="Dark">&#9790;</button>
+      </div>
     </div>
 
     <div class="sidebar-status" :class="{ offline: !connected && !$store.app.booting }">
@@ -1088,10 +1102,12 @@
                     </div>
                     <div class="text-sm text-dim mb-2" x-text="a.description"></div>
                     <div class="text-xs text-dim">Agent: <span x-text="a.agent_name"></span> &middot; <span x-text="timeAgo(a.created_at)"></span></div>
-                    <div class="approval-actions" x-show="a.status === 'pending'" style="display:flex;gap:8px;margin-top:12px">
-                      <button class="btn btn-success btn-sm" @click="approve(a.id)">Approve</button>
-                      <button class="btn btn-danger btn-sm" @click="reject(a.id)">Reject</button>
-                    </div>
+                    <template x-if="a.status === 'pending'">
+                      <div class="approval-actions" style="display:flex;gap:8px;margin-top:12px">
+                        <button class="btn btn-success btn-sm" @click="approve(a.id)">Approve</button>
+                        <button class="btn btn-danger btn-sm" @click="reject(a.id)">Reject</button>
+                      </div>
+                    </template>
                   </div>
                 </template>
               </div>
@@ -1519,7 +1535,7 @@
                       <th>Agent</th>
                       <th>Status</th>
                       <th>Last Run</th>
-                      <th>Runs</th>
+                      <th>Next Run</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -1539,7 +1555,7 @@
                           <span class="badge" :class="job.enabled ? 'badge-success' : 'badge-dim'" x-text="job.enabled ? 'Active' : 'Paused'"></span>
                         </td>
                         <td class="text-xs" :title="formatTime(job.last_run)" x-text="relativeTime(job.last_run)"></td>
-                        <td class="text-xs" x-text="job.run_count || 0"></td>
+                        <td class="text-xs" :title="formatTime(job.next_run)" x-text="relativeTime(job.next_run)"></td>
                         <td>
                           <div class="flex gap-1">
                             <button class="btn btn-primary btn-sm" @click="runNow(job)" :disabled="runningJobId === job.id">
@@ -2881,6 +2897,19 @@ args = ["-y", "@modelcontextprotocol/server-filesystem", "/path"]</pre>
                   <!-- No key needed -->
                   <template x-if="!p.api_key_env || p.key_required === false">
                     <div class="text-xs mt-2" style="color:var(--success)" x-show="p.auth_status !== 'configured' && p.auth_status !== 'not_set' && p.auth_status !== 'missing'">No API key needed &mdash; runs locally or is free</div>
+                  </template>
+                  <!-- Base URL editor for local providers -->
+                  <template x-if="p.is_local">
+                    <div class="mt-3" style="border-top:1px solid var(--border);padding-top:8px">
+                      <div class="text-xs text-dim mb-1">Base URL</div>
+                      <div class="key-input-group">
+                        <input type="text" :placeholder="'http://localhost:...'" x-model="providerUrlInputs[p.id]" style="font-size:12px">
+                        <button class="btn btn-primary btn-sm" @click="saveProviderUrl(p)" :disabled="providerUrlSaving[p.id]">
+                          <span x-show="!providerUrlSaving[p.id]">Save</span>
+                          <span x-show="providerUrlSaving[p.id]" class="spinner" style="width:10px;height:10px;border-width:2px"></span>
+                        </button>
+                      </div>
+                    </div>
                   </template>
                 </div>
               </template>

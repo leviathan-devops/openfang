@@ -127,6 +127,8 @@ pub struct OpenFangKernel {
     pub booted_at: std::time::Instant,
     /// WhatsApp Web gateway child process PID (for shutdown cleanup).
     pub whatsapp_gateway_pid: Arc<std::sync::Mutex<Option<u32>>>,
+    /// Channel adapters registered at bridge startup (for proactive `channel_send` tool).
+    pub channel_adapters: dashmap::DashMap<String, Arc<dyn openfang_channels::types::ChannelAdapter>>,
     /// Weak self-reference for trigger dispatch (set after Arc wrapping).
     self_handle: OnceLock<Weak<OpenFangKernel>>,
 }
@@ -590,9 +592,16 @@ impl OpenFangKernel {
             info!("RBAC enabled with {} users", auth.user_count());
         }
 
-        // Initialize model catalog and detect provider auth
+        // Initialize model catalog, detect provider auth, and apply URL overrides
         let mut model_catalog = openfang_runtime::model_catalog::ModelCatalog::new();
         model_catalog.detect_auth();
+        if !config.provider_urls.is_empty() {
+            model_catalog.apply_url_overrides(&config.provider_urls);
+            info!(
+                "applied {} provider URL override(s)",
+                config.provider_urls.len()
+            );
+        }
         let available_count = model_catalog.available_models().len();
         let total_count = model_catalog.list_models().len();
         let local_count = model_catalog
@@ -867,6 +876,7 @@ impl OpenFangKernel {
             peer_node: None,
             booted_at: std::time::Instant::now(),
             whatsapp_gateway_pid: Arc::new(std::sync::Mutex::new(None)),
+            channel_adapters: dashmap::DashMap::new(),
             self_handle: OnceLock::new(),
         };
 
@@ -956,6 +966,21 @@ impl OpenFangKernel {
         let mut manifest = manifest;
         if manifest.exec_policy.is_none() {
             manifest.exec_policy = Some(self.config.exec_policy.clone());
+        }
+
+        // Overlay kernel default_model onto agent if no custom key/url is set.
+        // This ensures agents respect the user's configured provider from `openfang init`.
+        if manifest.model.api_key_env.is_none() && manifest.model.base_url.is_none() {
+            let dm = &self.config.default_model;
+            if !dm.provider.is_empty() {
+                manifest.model.provider = dm.provider.clone();
+            }
+            if !dm.model.is_empty() {
+                manifest.model.model = dm.model.clone();
+            }
+            if dm.base_url.is_some() {
+                manifest.model.base_url = dm.base_url.clone();
+            }
         }
 
         // Create workspace directory for the agent
@@ -1071,12 +1096,22 @@ impl OpenFangKernel {
     }
 
     /// Send a message to an agent and get a response.
+    ///
+    /// Automatically upgrades the kernel handle from `self_handle` so that
+    /// agent turns triggered by cron, channels, events, or inter-agent calls
+    /// have full access to kernel tools (cron_create, agent_send, etc.).
     pub async fn send_message(
         &self,
         agent_id: AgentId,
         message: &str,
     ) -> KernelResult<AgentLoopResult> {
-        self.send_message_with_handle(agent_id, message, None).await
+        let handle: Option<Arc<dyn KernelHandle>> = self
+            .self_handle
+            .get()
+            .and_then(|w| w.upgrade())
+            .map(|arc| arc as Arc<dyn KernelHandle>);
+        self.send_message_with_handle(agent_id, message, handle)
+            .await
     }
 
     /// Send a message with an optional kernel handle for inter-agent tools.
@@ -1244,7 +1279,16 @@ impl OpenFangKernel {
                 estimate_token_count, needs_compaction as check_compact,
                 needs_compaction_by_tokens, CompactionConfig,
             };
-            let config = CompactionConfig::default();
+            // Build CompactionConfig from TOML config instead of using hardcoded defaults
+            let toml_cfg = &self.config.compaction;
+            let config = CompactionConfig {
+                threshold: toml_cfg.threshold,
+                keep_recent: toml_cfg.keep_recent,
+                max_summary_tokens: toml_cfg.max_summary_tokens,
+                token_threshold_ratio: toml_cfg.token_threshold_ratio,
+                context_window_tokens: toml_cfg.context_window_tokens,
+                ..CompactionConfig::default()
+            };
             let by_messages = check_compact(&session, &config);
             let estimated = estimate_token_count(
                 &session.messages,
@@ -1312,7 +1356,7 @@ impl OpenFangKernel {
                 recalled_memories: vec![],
                 skill_summary: self.build_skill_summary(&manifest.skills),
                 skill_prompt_context: self.collect_prompt_context(&manifest.skills),
-                mcp_summary: if mcp_tool_count >= 3 {
+                mcp_summary: if mcp_tool_count > 0 {
                     self.build_mcp_summary(&manifest.mcp_servers)
                 } else {
                     String::new()
@@ -1760,7 +1804,7 @@ impl OpenFangKernel {
                 recalled_memories: vec![], // Recalled in agent_loop, not here
                 skill_summary: self.build_skill_summary(&manifest.skills),
                 skill_prompt_context: self.collect_prompt_context(&manifest.skills),
-                mcp_summary: if mcp_tool_count >= 3 {
+                mcp_summary: if mcp_tool_count > 0 {
                     self.build_mcp_summary(&manifest.mcp_servers)
                 } else {
                     String::new()
@@ -2190,16 +2234,34 @@ impl OpenFangKernel {
 
     /// Switch an agent's model.
     pub fn set_agent_model(&self, agent_id: AgentId, model: &str) -> KernelResult<()> {
-        self.registry
-            .update_model(agent_id, model.to_string())
-            .map_err(KernelError::OpenFang)?;
+        // Resolve provider from model catalog so switching models also switches provider
+        let resolved_provider = self
+            .model_catalog
+            .read()
+            .ok()
+            .and_then(|catalog| {
+                catalog
+                    .find_model(model)
+                    .map(|entry| entry.provider.clone())
+            });
+
+        if let Some(provider) = resolved_provider {
+            self.registry
+                .update_model_and_provider(agent_id, model.to_string(), provider.clone())
+                .map_err(KernelError::OpenFang)?;
+            info!(agent_id = %agent_id, model = %model, provider = %provider, "Agent model+provider updated");
+        } else {
+            self.registry
+                .update_model(agent_id, model.to_string())
+                .map_err(KernelError::OpenFang)?;
+            info!(agent_id = %agent_id, model = %model, "Agent model updated");
+        }
 
         // Persist the updated entry
         if let Some(entry) = self.registry.get(agent_id) {
             let _ = self.memory.save_agent(&entry);
         }
 
-        info!(agent_id = %agent_id, model = %model, "Agent model updated");
         Ok(())
     }
 
@@ -2722,6 +2784,14 @@ impl OpenFangKernel {
                     self.cron_scheduler
                         .set_max_total_jobs(new_config.max_cron_jobs);
                 }
+                HotAction::ReloadProviderUrls => {
+                    info!("Hot-reload: applying provider URL overrides");
+                    let mut catalog = self
+                        .model_catalog
+                        .write()
+                        .unwrap_or_else(|e| e.into_inner());
+                    catalog.apply_url_overrides(&new_config.provider_urls);
+                }
                 _ => {
                     // Other hot actions (channels, web, browser, extensions, etc.)
                     // are logged but not applied here — they require subsystem-specific
@@ -3034,6 +3104,8 @@ impl OpenFangKernel {
             let kernel = Arc::clone(self);
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+                // Use Skip to avoid burst-firing after a long job blocks the loop.
+                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
                 let mut persist_counter = 0u32;
                 interval.tick().await; // Skip first immediate tick
                 loop {
@@ -3075,15 +3147,24 @@ impl OpenFangKernel {
                                 tracing::debug!(job = %job_name, agent = %agent_id, "Cron: firing agent turn");
                                 let timeout_s = timeout_secs.unwrap_or(120);
                                 let timeout = std::time::Duration::from_secs(timeout_s);
+                                let delivery = job.delivery.clone();
                                 match tokio::time::timeout(
                                     timeout,
                                     kernel.send_message(agent_id, message),
                                 )
                                 .await
                                 {
-                                    Ok(Ok(_result)) => {
+                                    Ok(Ok(result)) => {
                                         tracing::info!(job = %job_name, "Cron job completed successfully");
                                         kernel.cron_scheduler.record_success(job_id);
+                                        // Deliver response to configured channel
+                                        cron_deliver_response(
+                                            &kernel,
+                                            agent_id,
+                                            &result.response,
+                                            &delivery,
+                                        )
+                                        .await;
                                     }
                                     Ok(Err(e)) => {
                                         let err_msg = format!("{e}");
@@ -3435,7 +3516,11 @@ impl OpenFangKernel {
             let driver_config = DriverConfig {
                 provider: agent_provider.clone(),
                 api_key: std::env::var(&api_key_env).ok(),
-                base_url: manifest.model.base_url.clone(),
+                base_url: manifest
+                    .model
+                    .base_url
+                    .clone()
+                    .or_else(|| self.config.default_model.base_url.clone()),
             };
 
             drivers::create_driver(&driver_config).map_err(|e| {
@@ -4001,7 +4086,18 @@ impl OpenFangKernel {
                 tool_names.join(", ")
             ));
         }
-        summary.push_str("MCP tools are prefixed with mcp_{server}_ and work like regular tools.");
+        summary.push_str("MCP tools are prefixed with mcp_{server}_ and work like regular tools.\n");
+        // Add filesystem-specific guidance when a filesystem MCP server is connected
+        let has_filesystem = servers.keys().any(|s| s.contains("filesystem"));
+        if has_filesystem {
+            summary.push_str(
+                "IMPORTANT: For accessing files OUTSIDE your workspace directory, you MUST use \
+                 the MCP filesystem tools (e.g. mcp_filesystem_read_file, mcp_filesystem_list_directory) \
+                 instead of the built-in file_read/file_list/file_write tools, which are restricted to \
+                 the workspace. The MCP filesystem server has been granted access to specific directories \
+                 by the user.",
+            );
+        }
         summary
     }
 
@@ -4135,6 +4231,74 @@ fn shared_memory_agent_id() -> AgentId {
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x01,
     ]))
+}
+
+/// Deliver a cron job's agent response to the configured delivery target.
+async fn cron_deliver_response(
+    kernel: &OpenFangKernel,
+    agent_id: AgentId,
+    response: &str,
+    delivery: &openfang_types::scheduler::CronDelivery,
+) {
+    use openfang_types::scheduler::CronDelivery;
+
+    if response.is_empty() {
+        return;
+    }
+
+    match delivery {
+        CronDelivery::None => {}
+        CronDelivery::Channel { channel, to } => {
+            tracing::debug!(channel = %channel, to = %to, "Cron: delivering to channel");
+            // Persist as last channel for this agent (survives restarts)
+            let kv_val = serde_json::json!({"channel": channel, "recipient": to});
+            let _ = kernel
+                .memory
+                .structured_set(agent_id, "delivery.last_channel", kv_val);
+        }
+        CronDelivery::LastChannel => {
+            match kernel
+                .memory
+                .structured_get(agent_id, "delivery.last_channel")
+            {
+                Ok(Some(val)) => {
+                    let channel = val["channel"].as_str().unwrap_or("");
+                    let recipient = val["recipient"].as_str().unwrap_or("");
+                    if !channel.is_empty() && !recipient.is_empty() {
+                        tracing::info!(
+                            channel = %channel,
+                            recipient = %recipient,
+                            "Cron: delivering to last channel"
+                        );
+                    }
+                }
+                _ => {
+                    tracing::debug!("Cron: no last channel found for agent {}", agent_id);
+                }
+            }
+        }
+        CronDelivery::Webhook { url } => {
+            tracing::debug!(url = %url, "Cron: delivering via webhook");
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build();
+            if let Ok(client) = client {
+                let payload = serde_json::json!({
+                    "agent_id": agent_id.to_string(),
+                    "response": response,
+                    "timestamp": chrono::Utc::now().to_rfc3339(),
+                });
+                match client.post(url).json(&payload).send().await {
+                    Ok(resp) => {
+                        tracing::debug!(status = %resp.status(), "Cron webhook delivered");
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Cron webhook delivery failed");
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -4560,6 +4724,42 @@ impl KernelHandle for OpenFangKernel {
             .iter()
             .find(|(_, card)| card.name.to_lowercase() == name_lower)
             .map(|(url, _)| url.clone())
+    }
+
+    async fn send_channel_message(
+        &self,
+        channel: &str,
+        recipient: &str,
+        message: &str,
+    ) -> Result<String, String> {
+        let adapter = self
+            .channel_adapters
+            .get(channel)
+            .ok_or_else(|| {
+                let available: Vec<String> = self
+                    .channel_adapters
+                    .iter()
+                    .map(|e| e.key().clone())
+                    .collect();
+                format!(
+                    "Channel '{}' not found. Available channels: {:?}",
+                    channel, available
+                )
+            })?
+            .clone();
+
+        let user = openfang_channels::types::ChannelUser {
+            platform_id: recipient.to_string(),
+            display_name: recipient.to_string(),
+            openfang_user: None,
+        };
+
+        adapter
+            .send(&user, openfang_channels::types::ChannelContent::Text(message.to_string()))
+            .await
+            .map_err(|e| format!("Channel send failed: {e}"))?;
+
+        Ok(format!("Message sent to {} via {}", recipient, channel))
     }
 
     async fn spawn_agent_checked(

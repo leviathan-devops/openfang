@@ -87,6 +87,10 @@ function toolIcon(toolName) {
 
 // Alpine.js global store
 document.addEventListener('alpine:init', function() {
+  // Restore saved API key on load
+  var savedKey = localStorage.getItem('openfang-api-key');
+  if (savedKey) OpenFangAPI.setAuthToken(savedKey);
+
   Alpine.store('app', {
     agents: [],
     connected: false,
@@ -99,6 +103,7 @@ document.addEventListener('alpine:init', function() {
     pendingAgent: null,
     focusMode: localStorage.getItem('openfang-focus') === 'true',
     showOnboarding: false,
+    showAuthPrompt: false,
 
     toggleFocusMode() {
       this.focusMode = !this.focusMode;
@@ -146,6 +151,30 @@ document.addEventListener('alpine:init', function() {
     dismissOnboarding() {
       this.showOnboarding = false;
       localStorage.setItem('openfang-onboarded', 'true');
+    },
+
+    async checkAuth() {
+      try {
+        await OpenFangAPI.get('/api/providers');
+        this.showAuthPrompt = false;
+      } catch(e) {
+        if (e.message && (e.message.indexOf('Not authorized') >= 0 || e.message.indexOf('401') >= 0 || e.message.indexOf('Missing Authorization') >= 0)) {
+          this.showAuthPrompt = true;
+        }
+      }
+    },
+
+    submitApiKey(key) {
+      if (!key || !key.trim()) return;
+      OpenFangAPI.setAuthToken(key.trim());
+      localStorage.setItem('openfang-api-key', key.trim());
+      this.showAuthPrompt = false;
+      this.refreshAgents();
+    },
+
+    clearApiKey() {
+      OpenFangAPI.setAuthToken('');
+      localStorage.removeItem('openfang-api-key');
     }
   });
 });
@@ -154,7 +183,12 @@ document.addEventListener('alpine:init', function() {
 function app() {
   return {
     page: 'agents',
-    theme: localStorage.getItem('openfang-theme') || 'light',
+    themeMode: localStorage.getItem('openfang-theme-mode') || 'system',
+    theme: (() => {
+      var mode = localStorage.getItem('openfang-theme-mode') || 'system';
+      if (mode === 'system') return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      return mode;
+    })(),
     sidebarCollapsed: localStorage.getItem('openfang-sidebar') === 'collapsed',
     mobileMenuOpen: false,
     connected: false,
@@ -166,6 +200,13 @@ function app() {
 
     init() {
       var self = this;
+
+      // Listen for OS theme changes (only matters when mode is 'system')
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+        if (self.themeMode === 'system') {
+          self.theme = e.matches ? 'dark' : 'light';
+        }
+      });
 
       // Hash routing
       var validPages = ['overview','agents','sessions','approvals','workflows','scheduler','channels','skills','hands','analytics','logs','settings','wizard'];
@@ -225,6 +266,7 @@ function app() {
       // Initial data load
       this.pollStatus();
       Alpine.store('app').checkOnboarding();
+      Alpine.store('app').checkAuth();
       setInterval(function() { self.pollStatus(); }, 5000);
     },
 
@@ -234,9 +276,20 @@ function app() {
       this.mobileMenuOpen = false;
     },
 
+    setTheme(mode) {
+      this.themeMode = mode;
+      localStorage.setItem('openfang-theme-mode', mode);
+      if (mode === 'system') {
+        this.theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      } else {
+        this.theme = mode;
+      }
+    },
+
     toggleTheme() {
-      this.theme = this.theme === 'dark' ? 'light' : 'dark';
-      localStorage.setItem('openfang-theme', this.theme);
+      var modes = ['light', 'system', 'dark'];
+      var next = modes[(modes.indexOf(this.themeMode) + 1) % modes.length];
+      this.setTheme(next);
     },
 
     toggleSidebar() {

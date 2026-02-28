@@ -3,6 +3,7 @@
 //! When a daemon is running (`openfang start`), the CLI talks to it over HTTP.
 //! Otherwise, commands boot an in-process kernel (single-shot mode).
 
+mod bundled_agents;
 mod dotenv;
 mod launcher;
 mod mcp;
@@ -952,14 +953,20 @@ pub(crate) fn restrict_dir_permissions(_path: &std::path::Path) {}
 pub(crate) fn find_daemon() -> Option<String> {
     let home_dir = dirs::home_dir()?.join(".openfang");
     let info = read_daemon_info(&home_dir)?;
-    let url = format!("http://{}/api/health", info.listen_addr);
+
+    // Normalize listen address: replace 0.0.0.0 with 127.0.0.1 to avoid
+    // DNS/connectivity issues on macOS where 0.0.0.0 can hang.
+    let addr = info.listen_addr.replace("0.0.0.0", "127.0.0.1");
+    let url = format!("http://{addr}/api/health");
+
     let client = reqwest::blocking::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(1))
         .timeout(std::time::Duration::from_secs(2))
         .build()
         .ok()?;
     let resp = client.get(&url).send().ok()?;
     if resp.status().is_success() {
-        Some(format!("http://{}", info.listen_addr))
+        Some(format!("http://{addr}"))
     } else {
         None
     }
@@ -1050,6 +1057,9 @@ fn cmd_init(quick: bool) {
             });
         }
     }
+
+    // Install bundled agent templates (skips existing ones to preserve user edits)
+    bundled_agents::install_bundled_agents(&openfang_dir.join("agents"));
 
     if quick {
         cmd_init_quick(&openfang_dir);
@@ -1328,7 +1338,23 @@ fn cmd_stop() {
             let client = daemon_client();
             match client.post(format!("{base}/api/shutdown")).send() {
                 Ok(r) if r.status().is_success() => {
-                    ui::success("Daemon is shutting down");
+                    // Wait for daemon to actually stop (up to 5 seconds)
+                    for _ in 0..10 {
+                        std::thread::sleep(std::time::Duration::from_millis(500));
+                        if find_daemon().is_none() {
+                            ui::success("Daemon stopped");
+                            return;
+                        }
+                    }
+                    // Still alive — force kill via PID
+                    if let Some(home) = dirs::home_dir() {
+                        let of_dir = home.join(".openfang");
+                        if let Some(info) = read_daemon_info(&of_dir) {
+                            force_kill_pid(info.pid);
+                            let _ = std::fs::remove_file(of_dir.join("daemon.json"));
+                        }
+                    }
+                    ui::success("Daemon stopped (forced)");
                 }
                 Ok(r) => {
                     ui::error(&format!("Shutdown request failed ({})", r.status()));
@@ -1344,6 +1370,21 @@ fn cmd_stop() {
                 "Is it running? Check with: openfang status",
             );
         }
+    }
+}
+
+fn force_kill_pid(pid: u32) {
+    #[cfg(unix)]
+    {
+        let _ = std::process::Command::new("kill")
+            .args(["-9", &pid.to_string()])
+            .output();
+    }
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/F"])
+            .output();
     }
 }
 

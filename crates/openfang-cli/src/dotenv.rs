@@ -11,19 +11,32 @@ pub fn env_file_path() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join(".openfang").join(".env"))
 }
 
-/// Load `~/.openfang/.env` into `std::env`.
+/// Load `~/.openfang/.env` and `~/.openfang/secrets.env` into `std::env`.
 ///
 /// System env vars take priority — existing vars are NOT overridden.
-/// Silently does nothing if the file doesn't exist.
+/// `secrets.env` is loaded second so `.env` values take priority over secrets
+/// (but both yield to system env vars).
+/// Silently does nothing if the files don't exist.
 pub fn load_dotenv() {
-    let path = match env_file_path() {
+    load_env_file(env_file_path());
+    // Also load secrets.env (written by dashboard "Set API Key" button)
+    load_env_file(secrets_env_path());
+}
+
+/// Return the path to `~/.openfang/secrets.env`.
+pub fn secrets_env_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|h| h.join(".openfang").join("secrets.env"))
+}
+
+fn load_env_file(path: Option<PathBuf>) {
+    let path = match path {
         Some(p) => p,
         None => return,
     };
 
     let content = match std::fs::read_to_string(&path) {
         Ok(c) => c,
-        Err(_) => return, // file doesn't exist or unreadable — that's fine
+        Err(_) => return,
     };
 
     for line in content.lines() {
@@ -33,7 +46,6 @@ pub fn load_dotenv() {
         }
 
         if let Some((key, value)) = parse_env_line(trimmed) {
-            // Only set if not already in environment (system env takes priority)
             if std::env::var(&key).is_err() {
                 std::env::set_var(&key, &value);
             }

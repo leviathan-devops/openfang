@@ -785,6 +785,15 @@ impl ChannelBridgeHandle for KernelBridgeAdapter {
             )
         };
         self.kernel.delivery_tracker.record(agent_id, receipt);
+
+        // Persist last channel for cron CronDelivery::LastChannel
+        if success {
+            let kv_val = serde_json::json!({"channel": channel, "recipient": recipient});
+            let _ = self
+                .kernel
+                .memory
+                .structured_set(agent_id, "delivery.last_channel", kv_val);
+        }
     }
 
     async fn check_auto_reply(&self, agent_id: AgentId, message: &str) -> Option<String> {
@@ -987,6 +996,7 @@ pub async fn start_channel_bridge_with_config(
 ) -> (Option<BridgeManager>, Vec<String>) {
     let has_any = config.telegram.is_some()
         || config.discord.is_some()
+        || !config.extra_discord.is_empty()
         || config.slack.is_some()
         || config.whatsapp.is_some()
         || config.signal.is_some()
@@ -1054,7 +1064,7 @@ pub async fn start_channel_bridge_with_config(
         }
     }
 
-    // Discord
+    // Discord (primary)
     if let Some(ref dc_config) = config.discord {
         if let Some(token) = read_token(&dc_config.bot_token_env, "Discord") {
             let adapter = Arc::new(DiscordAdapter::new(
@@ -1063,6 +1073,19 @@ pub async fn start_channel_bridge_with_config(
                 dc_config.intents,
             ));
             adapters.push((adapter, dc_config.default_agent.clone()));
+        }
+    }
+
+    // Discord (extra bots — multi-bot routing)
+    for (i, dc_config) in config.extra_discord.iter().enumerate() {
+        if let Some(token) = read_token(&dc_config.bot_token_env, &format!("Discord extra #{}", i + 1)) {
+            let adapter = Arc::new(DiscordAdapter::new(
+                token,
+                dc_config.allowed_guilds.clone(),
+                dc_config.intents,
+            ));
+            adapters.push((adapter, dc_config.default_agent.clone()));
+            info!("Discord extra bot #{} started (env: {})", i + 1, dc_config.bot_token_env);
         }
     }
 
@@ -1571,12 +1594,18 @@ pub async fn start_channel_bridge_with_config(
     let mut started_names = Vec::new();
     for (adapter, _) in adapters {
         let name = adapter.name().to_string();
+        // Register adapter in kernel so agents can use `channel_send` tool
+        kernel
+            .channel_adapters
+            .insert(name.clone(), adapter.clone());
         match manager.start_adapter(adapter).await {
             Ok(()) => {
                 info!("{name} channel bridge started");
                 started_names.push(name);
             }
             Err(e) => {
+                // Remove from kernel map if start failed
+                kernel.channel_adapters.remove(&name);
                 error!("Failed to start {name} bridge: {e}");
             }
         }

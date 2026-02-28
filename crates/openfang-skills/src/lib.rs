@@ -48,7 +48,6 @@ pub enum SkillError {
 #[serde(rename_all = "lowercase")]
 pub enum SkillRuntime {
     /// Python script executed in subprocess.
-    #[default]
     Python,
     /// WASM module executed in sandbox.
     Wasm,
@@ -58,6 +57,7 @@ pub enum SkillRuntime {
     Builtin,
     /// Prompt-only skill: injects context into the LLM system prompt.
     /// No executable code — the Markdown body teaches the LLM.
+    #[default]
     PromptOnly,
 }
 
@@ -101,7 +101,8 @@ pub struct SkillRequirements {
 pub struct SkillManifest {
     /// Skill metadata.
     pub skill: SkillMeta,
-    /// Runtime configuration.
+    /// Runtime configuration (defaults to PromptOnly if omitted).
+    #[serde(default)]
     pub runtime: SkillRuntimeConfig,
     /// Tools provided by this skill.
     #[serde(default)]
@@ -144,7 +145,7 @@ fn default_version() -> String {
 }
 
 /// Runtime configuration section.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SkillRuntimeConfig {
     /// Runtime type.
     #[serde(rename = "type", default)]
