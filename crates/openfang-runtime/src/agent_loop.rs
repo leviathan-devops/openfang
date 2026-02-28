@@ -378,11 +378,50 @@ pub async fn run_agent_loop(
                 } else {
                     text
                 };
+                // ── RESPONSE LENGTH ENFORCEMENT ──────────────────────────
+                // Hard cap on word count BEFORE saving to session.
+                // This prevents context bloat from verbose LLM responses.
+                // Brain (reasoner) gets 600 words, all others get 350.
+                let max_words: usize = if manifest.name == "brain" { 600 } else { 350 };
+                let text = {
+                    let words: Vec<&str> = text.split_whitespace().collect();
+                    if words.len() > max_words {
+                        let truncated: String = words[..max_words].join(" ");
+                        tracing::info!(
+                            agent = %manifest.name,
+                            original_words = words.len(),
+                            max_words,
+                            "Response truncated to save context budget"
+                        );
+                        format!(
+                            "{}\n\n[Truncated: {} → {} words]",
+                            truncated, words.len(), max_words
+                        )
+                    } else {
+                        text
+                    }
+                };
+
                 final_response = text.clone();
                 session.messages.push(Message::assistant(text));
 
                 // Prune NO_REPLY heartbeat turns to save context budget
                 crate::session_repair::prune_heartbeat_turns(&mut session.messages, 10);
+
+                // ── SESSION COMPACTION ────────────────────────────────────
+                // If the session has grown too large, trim older messages
+                // to keep context under control. Keep system + last N turns.
+                const MAX_SESSION_MESSAGES: usize = 20;
+                if session.messages.len() > MAX_SESSION_MESSAGES {
+                    let excess = session.messages.len() - MAX_SESSION_MESSAGES;
+                    tracing::info!(
+                        agent = %manifest.name,
+                        removed = excess,
+                        remaining = MAX_SESSION_MESSAGES,
+                        "Session compaction: trimming old messages"
+                    );
+                    session.messages.drain(..excess);
+                }
 
                 // Save session
                 memory
@@ -1255,11 +1294,45 @@ pub async fn run_agent_loop_streaming(
                 } else {
                     text
                 };
+                // ── RESPONSE LENGTH ENFORCEMENT (streaming) ──────────────
+                let max_words: usize = if manifest.name == "brain" { 600 } else { 350 };
+                let text = {
+                    let words: Vec<&str> = text.split_whitespace().collect();
+                    if words.len() > max_words {
+                        let truncated: String = words[..max_words].join(" ");
+                        tracing::info!(
+                            agent = %manifest.name,
+                            original_words = words.len(),
+                            max_words,
+                            "Response truncated (streaming) to save context budget"
+                        );
+                        format!(
+                            "{}\n\n[Truncated: {} → {} words]",
+                            truncated, words.len(), max_words
+                        )
+                    } else {
+                        text
+                    }
+                };
+
                 final_response = text.clone();
                 session.messages.push(Message::assistant(text));
 
                 // Prune NO_REPLY heartbeat turns to save context budget
                 crate::session_repair::prune_heartbeat_turns(&mut session.messages, 10);
+
+                // ── SESSION COMPACTION (streaming) ────────────────────────
+                const MAX_SESSION_MESSAGES: usize = 20;
+                if session.messages.len() > MAX_SESSION_MESSAGES {
+                    let excess = session.messages.len() - MAX_SESSION_MESSAGES;
+                    tracing::info!(
+                        agent = %manifest.name,
+                        removed = excess,
+                        remaining = MAX_SESSION_MESSAGES,
+                        "Session compaction (streaming): trimming old messages"
+                    );
+                    session.messages.drain(..excess);
+                }
 
                 memory
                     .save_session(session)

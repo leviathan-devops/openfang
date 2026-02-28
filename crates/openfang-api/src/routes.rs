@@ -270,7 +270,7 @@ pub async fn send_message(
             // Guard: ensure we never return an empty response to the client
             let response = if result.response.trim().is_empty() {
                 format!(
-                    "[The agent completed processing but returned no text response. ({} in / {} out | {} iter)]",
+                    "[No text response. ({} in / {} out | {} iter)]",
                     result.total_usage.input_tokens,
                     result.total_usage.output_tokens,
                     result.iterations,
@@ -278,6 +278,29 @@ pub async fn send_message(
             } else {
                 result.response
             };
+
+            // ── TOKEN USAGE FOOTER (API responses) ───────────────────
+            let in_tok = result.total_usage.input_tokens;
+            let out_tok = result.total_usage.output_tokens;
+            let response = if in_tok > 0 || out_tok > 0 {
+                let in_d = if in_tok >= 1000 {
+                    format!("{:.1}k", in_tok as f64 / 1000.0)
+                } else {
+                    format!("{in_tok}")
+                };
+                let out_d = if out_tok >= 1000 {
+                    format!("{:.1}k", out_tok as f64 / 1000.0)
+                } else {
+                    format!("{out_tok}")
+                };
+                format!(
+                    "{response}\n-# tokens: {in_d}in / {out_d}out · iter {}",
+                    result.iterations
+                )
+            } else {
+                response
+            };
+
             (
                 StatusCode::OK,
                 Json(serde_json::json!(MessageResponse {
