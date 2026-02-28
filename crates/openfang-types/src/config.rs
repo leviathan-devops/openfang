@@ -1483,6 +1483,11 @@ pub struct ChannelsConfig {
     pub telegram: Option<TelegramConfig>,
     /// Discord bot configuration (None = disabled).
     pub discord: Option<DiscordConfig>,
+    /// Additional Discord bots (multi-bot routing).
+    /// Each entry connects a separate bot with its own token and default agent.
+    /// Configure in config.toml as `[[channels.extra_discord]]`.
+    #[serde(default)]
+    pub extra_discord: Vec<DiscordConfig>,
     /// Slack bot configuration (None = disabled).
     pub slack: Option<SlackConfig>,
     /// WhatsApp Cloud API configuration (None = disabled).
