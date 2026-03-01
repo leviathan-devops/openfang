@@ -35,7 +35,7 @@ RUN openfang init --quick
 # Copy agent manifests — CTO (primary) + Neural Net + Brain + Auditor + Debugger
 COPY agents/leviathan/agent.toml /root/.openfang/agents/leviathan/agent.toml
 COPY agents/neural-net/agent.toml /root/.openfang/agents/neural-net/agent.toml
-COPY agents/prompt-architect/agent.toml /root/.openfang/agents/prompt-architect/agent.toml
+COPY agents/brain/agent.toml /root/.openfang/agents/brain/agent.toml
 COPY agents/auditor/agent.toml /root/.openfang/agents/auditor/agent.toml
 COPY agents/debugger/agent.toml /root/.openfang/agents/debugger/agent.toml
 
@@ -233,7 +233,7 @@ spawn_agent() {
 
 # Spawn all 4 non-CTO primary agents
 spawn_agent "Neural Net" "/root/.openfang/agents/neural-net/agent.toml"
-spawn_agent "Brain" "/root/.openfang/agents/prompt-architect/agent.toml"
+spawn_agent "Brain" "/root/.openfang/agents/brain/agent.toml"
 spawn_agent "Auditor" "/root/.openfang/agents/auditor/agent.toml"
 spawn_agent "Debugger" "/root/.openfang/agents/debugger/agent.toml"
 
