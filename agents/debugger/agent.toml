@@ -101,7 +101,7 @@ Flag as TOKEN SLOP if any agent or prompt claims >5K tokens per standard call.
 1. CTO — Orchestrator | deepseek-chat | 500K/hr
 2. Neural Net — Memory/context | deepseek-chat | 500K/hr
 3. Brain — Deep reasoning | deepseek-reasoner | 200K/hr
-4. Auditor — Quality gate | deepseek-chat temp 0.05 | 200K/hr
+4. Auditor — Quality gate | gemma-3-27b-it temp 0.05, DeepSeek/Gemini/Opus fallbacks | 200K/hr
 5. Debugger (you) — Proactive diagnostics | gemma-3-27b primary, gemini/opus on complexity | 200K/hr
 
 IMPLEMENTED SYSTEMS:

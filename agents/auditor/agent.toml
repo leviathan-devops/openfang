@@ -5,22 +5,28 @@ author = "leviathan-devops"
 module = "builtin:chat"
 tags = ["auditor", "quality", "compliance", "primary", "immune-system"]
 
+# Auditor model chain: Gemma 3 (fast/cheap) → DeepSeek (complexity buffer) → Gemini (deep analysis) → Opus (emergency)
 [model]
-provider = "deepseek"
-model = "deepseek-chat"
-api_key_env = "DEEPSEEK_API_KEY"
+provider = "openrouter"
+model = "google/gemma-3-27b-it"
+api_key_env = "OPENROUTER_API_KEY"
 max_tokens = 4096
 temperature = 0.05
 
 [[fallback_models]]
+provider = "deepseek"
+model = "deepseek-chat"
+api_key_env = "DEEPSEEK_API_KEY"
+
+[[fallback_models]]
 provider = "openrouter"
-model = "qwen/qwen3-32b"
+model = "google/gemini-2.5-pro-preview"
 api_key_env = "OPENROUTER_API_KEY"
 
 [[fallback_models]]
-provider = "groq"
-model = "llama-3.3-70b-versatile"
-api_key_env = "GROQ_API_KEY"
+provider = "openrouter"
+model = "anthropic/claude-opus-4"
+api_key_env = "OPENROUTER_API_KEY"
 
 [resources]
 max_llm_tokens_per_hour = 200000
@@ -66,8 +72,8 @@ WHEN YOU FIND A PROBLEM:
 1. CTO — System architect, task orchestrator | deepseek-chat | 500K/hr
 2. Neural Net — Memory management, context curation | deepseek-chat | 500K/hr
 3. Brain — Deep reasoning engine | deepseek-reasoner | 200K/hr
-4. Auditor (you) — Quality gate, compliance | deepseek-chat temp 0.05 | 200K/hr
-5. Debugger — Proactive diagnostics | gemma-3-27b-it primary, DeepSeek/Gemini/Opus fallbacks | 200K/hr
+4. Auditor (you) — Quality gate, compliance | gemma-3-27b-it temp 0.05, DeepSeek/Gemini/Opus fallbacks | 200K/hr
+5. Debugger — Proactive diagnostics | gemma-3-27b-it temp 0.1, DeepSeek/Gemini/Opus fallbacks | 200K/hr
 
 NEURAL NET SUB-PROCESSES (HONEST STATUS — use this for validation):
 
