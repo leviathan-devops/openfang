@@ -174,12 +174,21 @@ impl LlmDriver for OpenAIDriver {
                     });
                 }
                 (Role::Assistant, MessageContent::Text(text)) => {
+                    // BUG-013 FIX: DeepSeek Reasoner requires reasoning_content on ALL
+                    // assistant messages in conversation history. If missing, API returns
+                    // "Missing reasoning_content field in assistant message at index N".
+                    // For reasoner models, always provide reasoning_content (empty if none).
+                    let is_reasoner = request.model.contains("reasoner");
                     oai_messages.push(OaiMessage {
                         role: "assistant".to_string(),
                         content: Some(OaiMessageContent::Text(text.clone())),
                         tool_calls: None,
                         tool_call_id: None,
-                        reasoning_content: None,
+                        reasoning_content: if is_reasoner {
+                            Some(String::new())
+                        } else {
+                            None
+                        },
                     });
                 }
                 (Role::User, MessageContent::Blocks(blocks)) => {
@@ -262,10 +271,14 @@ impl LlmDriver for OpenAIDriver {
                             Some(tool_calls)
                         },
                         tool_call_id: None,
-                        reasoning_content: if thinking_parts.is_empty() {
-                            None
-                        } else {
+                        // BUG-013 FIX (complete/Blocks): For reasoner models,
+                        // always provide reasoning_content even when empty
+                        reasoning_content: if !thinking_parts.is_empty() {
                             Some(thinking_parts.join("\n\n"))
+                        } else if request.model.contains("reasoner") {
+                            Some(String::new())
+                        } else {
+                            None
                         },
                     });
                 }
@@ -522,12 +535,19 @@ impl LlmDriver for OpenAIDriver {
                     });
                 }
                 (Role::Assistant, MessageContent::Text(text)) => {
+                    // BUG-013 FIX (streaming path): DeepSeek Reasoner requires
+                    // reasoning_content on all assistant messages in history.
+                    let is_reasoner = request.model.contains("reasoner");
                     oai_messages.push(OaiMessage {
                         role: "assistant".to_string(),
                         content: Some(OaiMessageContent::Text(text.clone())),
                         tool_calls: None,
                         tool_call_id: None,
-                        reasoning_content: None,
+                        reasoning_content: if is_reasoner {
+                            Some(String::new())
+                        } else {
+                            None
+                        },
                     });
                 }
                 (Role::User, MessageContent::Blocks(blocks)) => {
@@ -584,10 +604,14 @@ impl LlmDriver for OpenAIDriver {
                             Some(tool_calls_out)
                         },
                         tool_call_id: None,
-                        reasoning_content: if thinking_parts.is_empty() {
-                            None
-                        } else {
+                        // BUG-013 FIX (stream/Blocks): For reasoner models,
+                        // always provide reasoning_content even when empty
+                        reasoning_content: if !thinking_parts.is_empty() {
                             Some(thinking_parts.join("\n\n"))
+                        } else if request.model.contains("reasoner") {
+                            Some(String::new())
+                        } else {
+                            None
                         },
                     });
                 }
