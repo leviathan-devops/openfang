@@ -1,4 +1,4 @@
-# Leviathan DevOps — OpenFang v0.1.3
+# Leviathan DevOps — OpenFang v0.2.3
 # Phase 4: Triple-agent architecture — CTO + Neural Net + Prompt Architect
 # CTO = conscious reasoning, full autonomy, primary interface
 # Neural Net = subconscious, server-hardwired background process, executive layer
@@ -10,9 +10,9 @@ RUN apt-get update && apt-get install -y ca-certificates curl libssl3 libsqlite3
 # Install agent-browser for web link absorption + knowledge harvesting
 RUN npm install -g agent-browser && agent-browser install --with-deps 2>/dev/null || true
 
-# Download OpenFang v0.1.3 release binary (latest — released 2026-02-26)
+# Download OpenFang v0.2.3 release binary (2026-03-01) — includes extra_discord multi-bot support
 RUN curl -fsSL \
-  "https://github.com/RightNow-AI/openfang/releases/download/v0.1.3/openfang-x86_64-unknown-linux-gnu.tar.gz" \
+  "https://github.com/RightNow-AI/openfang/releases/download/v0.2.3/openfang-x86_64-unknown-linux-gnu.tar.gz" \
   -o /tmp/openfang.tar.gz \
   && tar -xzf /tmp/openfang.tar.gz -C /usr/local/bin/ \
   && chmod +x /usr/local/bin/openfang \
