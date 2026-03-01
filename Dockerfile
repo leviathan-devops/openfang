@@ -21,10 +21,12 @@ RUN curl -fsSL \
 # Initialize OpenFang directory structure
 RUN openfang init --quick
 
-# Copy agent manifests — CTO (primary) + Neural Net (executive) + Prompt Architect (meta-prompting)
+# Copy agent manifests — CTO (primary) + Neural Net (executive) + Prompt Architect (meta-prompting) + Auditor + Debugger
 COPY agents/leviathan/agent.toml /root/.openfang/agents/leviathan/agent.toml
 COPY agents/neural-net/agent.toml /root/.openfang/agents/neural-net/agent.toml
 COPY agents/prompt-architect/agent.toml /root/.openfang/agents/prompt-architect/agent.toml
+COPY agents/auditor/agent.toml /root/.openfang/agents/auditor/agent.toml
+COPY agents/debugger/agent.toml /root/.openfang/agents/debugger/agent.toml
 
 # Full Leviathan config — DeepSeek V3 primary, OpenRouter + Groq fallbacks
 # Port injected at runtime from Railway's $PORT env var
@@ -77,47 +79,42 @@ cross_talk = true
 # ─── BOT 2: LEVIATHAN CLOUD (Neural Net) ───
 # DEFAULT responder in all channels. The always-on operator.
 # Emperor's generals — unified hive mind across the server.
-[channels.discord_cloud]
+# CRITICAL: Must use [[channels.extra_discord]] array syntax — the kernel's
+# ChannelsConfig.extra_discord is a Vec<DiscordConfig> that requires TOML array-of-tables.
+# Using [channels.discord_cloud] creates an UNRECOGNIZED KEY that gets silently ignored.
+[[channels.extra_discord]]
 bot_token_env = "DISCORD_BOT_TOKEN_CLOUD"
 default_agent = "neural-net"
 intents = 37377
 typing_indicator = "persistent"
 
-[channels.discord_cloud.overrides]
+[channels.extra_discord.overrides]
 group_policy = "all"
 dm_policy = "respond"
 mention_agent = "neural-net"
 cross_talk = true
 
 # ─── BOT 3: LEVIATHAN BRAIN ───
-# SANDBOXED to 3 channels ONLY: #meta-prompting, #agent-prompting, #brainwave-data
-# Cannot see or respond in ANY other channel. Zero server-wide access.
+# SANDBOXED to specific channels: #meta-prompting, #agent-prompting
 # #meta-prompting = Owner + CTO private channel (Brain answers Owner's raw ideas)
 # #agent-prompting = CTO/Cloud query Brain here — ALL interactions visible as plaintext
-# #brainwave-data = Brain logs full reasoning chains as PDFs (write-only)
-[channels.discord_brain]
+[[channels.extra_discord]]
 bot_token_env = "DISCORD_BOT_TOKEN_BRAIN"
-default_agent = "prompt-architect"
+default_agent = "brain"
 intents = 37377
 typing_indicator = "persistent"
 
-[channels.discord_brain.overrides]
+[channels.extra_discord.overrides]
 group_policy = "none"
 dm_policy = "respond"
 
-# #meta-prompting — Owner's private idea refinement channel (Brain + CTO + Owner only)
-[channels.discord_brain.overrides."1476978586828411073"]
-agent = "prompt-architect"
+# #meta-prompting — Owner's private idea refinement channel
+[channels.extra_discord.overrides."1476978586828411073"]
+agent = "brain"
 
-# #agent-prompting — CTO/Cloud query Brain here, all interactions visible as plaintext
-# IMPORTANT: This channel ID must be set after creating the channel in Discord
-[channels.discord_brain.overrides."AGENT_PROMPTING_CHANNEL_ID"]
-agent = "prompt-architect"
-
-# #brainwave-data — Brain logs reasoning chain PDFs here (write-only output channel)
-# IMPORTANT: This channel ID must be set after creating the channel in Discord
-[channels.discord_brain.overrides."BRAINWAVE_DATA_CHANNEL_ID"]
-agent = "prompt-architect"
+# #agent-prompting — CTO/Cloud query Brain here
+[channels.extra_discord.overrides."1477054899161141402"]
+agent = "brain"
 TOML
 
 ENV RUST_BACKTRACE=1
@@ -194,21 +191,33 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-# Auto-spawn neural-net agent from its manifest
-NEURAL_NET_TOML=$(cat /root/.openfang/agents/neural-net/agent.toml)
-curl -sf -X POST "http://localhost:$PORT_VAL/api/agents" \
-  -H "Authorization: Bearer leviathan-test-key-2026" \
-  -H "Content-Type: application/json" \
-  -d "{\"manifest_toml\": $(echo "$NEURAL_NET_TOML" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')}" \
-  > /dev/null 2>&1 && echo "Neural Net spawned" || echo "Neural Net spawn failed (will retry)"
+# ─── AUTO-SPAWN ALL 5 PRIMARY AGENTS (v2.8 Hydra Architecture) ───
+# BUG-007: Deploy kills all dynamic agents. This auto-spawns them on boot.
+# Order matters: CTO first (already spawned by kernel from primary config),
+# then the remaining 4 primary agents.
 
-# Auto-spawn prompt-architect agent from its manifest
-PROMPT_ARCH_TOML=$(cat /root/.openfang/agents/prompt-architect/agent.toml)
-curl -sf -X POST "http://localhost:$PORT_VAL/api/agents" \
-  -H "Authorization: Bearer leviathan-test-key-2026" \
-  -H "Content-Type: application/json" \
-  -d "{\"manifest_toml\": $(echo "$PROMPT_ARCH_TOML" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')}" \
-  > /dev/null 2>&1 && echo "Prompt Architect spawned" || echo "Prompt Architect spawn failed (will retry)"
+spawn_agent() {
+  local NAME=$1
+  local TOML_PATH=$2
+  if [ -f "$TOML_PATH" ]; then
+    local TOML_CONTENT=$(cat "$TOML_PATH")
+    curl -sf -X POST "http://localhost:$PORT_VAL/api/agents" \
+      -H "Authorization: Bearer leviathan-test-key-2026" \
+      -H "Content-Type: application/json" \
+      -d "{\"manifest_toml\": $(echo "$TOML_CONTENT" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')}" \
+      > /dev/null 2>&1 && echo "$NAME spawned" || echo "$NAME spawn failed (will retry)"
+  else
+    echo "$NAME manifest not found at $TOML_PATH — skipping"
+  fi
+}
+
+# Spawn all 4 non-CTO primary agents
+spawn_agent "Neural Net" "/root/.openfang/agents/neural-net/agent.toml"
+spawn_agent "Brain" "/root/.openfang/agents/prompt-architect/agent.toml"
+spawn_agent "Auditor" "/root/.openfang/agents/auditor/agent.toml"
+spawn_agent "Debugger" "/root/.openfang/agents/debugger/agent.toml"
+
+echo "All 5 primary agents spawn attempted (CTO + Neural Net + Brain + Auditor + Debugger)"
 
 # Foreground the main process
 wait $OPENFANG_PID
