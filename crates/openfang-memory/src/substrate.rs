@@ -154,6 +154,16 @@ impl MemorySubstrate {
         self.sessions.create_session(agent_id)
     }
 
+    /// Create or restore a deterministic session for a named agent.
+    /// Same name = same session ID = restored context across deploys.
+    pub fn create_or_restore_session(
+        &self,
+        agent_id: AgentId,
+        agent_name: &str,
+    ) -> OpenFangResult<Session> {
+        self.sessions.create_or_restore_session(agent_id, agent_name)
+    }
+
     /// List all sessions with metadata.
     pub fn list_sessions(&self) -> OpenFangResult<Vec<serde_json::Value>> {
         self.sessions.list_sessions()

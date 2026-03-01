@@ -8,6 +8,7 @@ use rusqlite::Connection;
 use std::io::Write;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use tracing::info;
 
 /// A conversation session with message history.
 #[derive(Debug, Clone)]
@@ -168,7 +169,7 @@ impl SessionStore {
         Ok(sessions)
     }
 
-    /// Create a new empty session for an agent.
+    /// Create a new empty session for an agent (random ID — use for sub-agents only).
     pub fn create_session(&self, agent_id: AgentId) -> OpenFangResult<Session> {
         let session = Session {
             id: SessionId::new(),
@@ -178,6 +179,45 @@ impl SessionStore {
             label: None,
         };
         self.save_session(&session)?;
+        Ok(session)
+    }
+
+    /// Create or restore a deterministic session for a named agent.
+    /// If a session already exists for this agent name, return it with history intact.
+    /// If not, create a fresh one. This enables context persistence across deploys.
+    pub fn create_or_restore_session(
+        &self,
+        agent_id: AgentId,
+        agent_name: &str,
+    ) -> OpenFangResult<Session> {
+        let session_id = SessionId::for_agent(agent_name);
+
+        // Try to load existing session (persisted from previous deploy)
+        if let Some(existing) = self.get_session(session_id)? {
+            let msg_count = existing.messages.len();
+            info!(
+                agent = %agent_name,
+                session = %session_id,
+                messages = msg_count,
+                "Restored existing session — context preserved across deploy"
+            );
+            return Ok(existing);
+        }
+
+        // No previous session — create fresh
+        let session = Session {
+            id: session_id,
+            agent_id,
+            messages: Vec::new(),
+            context_window_tokens: 0,
+            label: Some(format!("primary:{agent_name}")),
+        };
+        self.save_session(&session)?;
+        info!(
+            agent = %agent_name,
+            session = %session_id,
+            "Created new deterministic session"
+        );
         Ok(session)
     }
 

@@ -975,14 +975,15 @@ impl OpenFangKernel {
         parent: Option<AgentId>,
     ) -> KernelResult<AgentId> {
         let agent_id = AgentId::new();
-        let session_id = SessionId::new();
         let name = manifest.name.clone();
+        let session_id = SessionId::for_agent(&name);
 
-        info!(agent = %name, id = %agent_id, parent = ?parent, "Spawning agent");
+        info!(agent = %name, id = %agent_id, session = %session_id, parent = ?parent, "Spawning agent (deterministic session)");
 
-        // Create session
+        // Create or restore session — deterministic by agent name so context
+        // persists across deploys. Same name = same session ID = restored history.
         self.memory
-            .create_session(agent_id)
+            .create_or_restore_session(agent_id, &name)
             .map_err(KernelError::OpenFang)?;
 
         // Inherit kernel exec_policy as fallback if agent manifest doesn't have one

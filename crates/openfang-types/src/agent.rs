@@ -148,6 +148,16 @@ impl SessionId {
     pub fn new() -> Self {
         Self(Uuid::new_v4())
     }
+
+    /// Create a deterministic SessionId from an agent name.
+    /// Uses UUID v5 (SHA-1 namespace) so the same agent name always produces
+    /// the same session ID. This enables session restoration across deploys —
+    /// when an agent is re-spawned with the same name, it finds its previous session.
+    pub fn for_agent(agent_name: &str) -> Self {
+        // OpenFang-specific namespace UUID (deterministic, never changes)
+        let namespace = Uuid::parse_str("a1b2c3d4-e5f6-7890-abcd-ef1234567890").unwrap();
+        Self(Uuid::new_v5(&namespace, agent_name.as_bytes()))
+    }
 }
 
 impl Default for SessionId {

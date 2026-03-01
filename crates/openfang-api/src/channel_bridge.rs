@@ -1128,16 +1128,24 @@ pub async fn start_channel_bridge_with_config(
         }
     }
 
-    // Discord (extra bots — multi-bot routing)
+    // Discord (extra bots — multi-bot routing with UNIQUE adapter names)
     for (i, dc_config) in config.extra_discord.iter().enumerate() {
         if let Some(token) = read_token(&dc_config.bot_token_env, &format!("Discord extra #{}", i + 1)) {
-            let adapter = Arc::new(DiscordAdapter::new(
+            // Derive unique name from the agent this bot routes to, or fall back to index.
+            // e.g. "discord-cloud", "discord-brain" — prevents DashMap key collision.
+            let bot_name = dc_config
+                .default_agent
+                .as_deref()
+                .map(|a| format!("discord-{a}"))
+                .unwrap_or_else(|| format!("discord-extra-{}", i + 1));
+            let adapter = Arc::new(DiscordAdapter::with_name(
+                bot_name.clone(),
                 token,
                 dc_config.allowed_guilds.clone(),
                 dc_config.intents,
             ));
             adapters.push((adapter, dc_config.default_agent.clone()));
-            info!("Discord extra bot #{} started (env: {})", i + 1, dc_config.bot_token_env);
+            info!("Discord bot '{}' started (env: {})", bot_name, dc_config.bot_token_env);
         }
     }
 

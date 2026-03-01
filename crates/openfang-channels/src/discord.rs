@@ -35,6 +35,8 @@ mod opcode {
 
 /// Discord Gateway adapter using WebSocket.
 pub struct DiscordAdapter {
+    /// Unique adapter name — supports multi-bot routing (e.g. "discord", "discord-cloud", "discord-brain").
+    adapter_name: String,
     /// SECURITY: Bot token is zeroized on drop to prevent memory disclosure.
     token: Zeroizing<String>,
     client: reqwest::Client,
@@ -52,8 +54,14 @@ pub struct DiscordAdapter {
 
 impl DiscordAdapter {
     pub fn new(token: String, allowed_guilds: Vec<u64>, intents: u64) -> Self {
+        Self::with_name("discord".to_string(), token, allowed_guilds, intents)
+    }
+
+    /// Create a Discord adapter with a custom unique name for multi-bot routing.
+    pub fn with_name(name: String, token: String, allowed_guilds: Vec<u64>, intents: u64) -> Self {
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
         Self {
+            adapter_name: name,
             token: Zeroizing::new(token),
             client: reqwest::Client::new(),
             allowed_guilds,
@@ -128,7 +136,7 @@ impl DiscordAdapter {
 #[async_trait]
 impl ChannelAdapter for DiscordAdapter {
     fn name(&self) -> &str {
-        "discord"
+        &self.adapter_name
     }
 
     fn channel_type(&self) -> ChannelType {
