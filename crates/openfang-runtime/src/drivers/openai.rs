@@ -123,6 +123,9 @@ struct OaiChoice {
 struct OaiResponseMessage {
     content: Option<String>,
     tool_calls: Option<Vec<OaiToolCall>>,
+    /// DeepSeek Reasoner returns reasoning in this field (separate from content)
+    #[serde(default)]
+    reasoning_content: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -390,9 +393,39 @@ impl LlmDriver for OpenAIDriver {
             let mut content = Vec::new();
             let mut tool_calls = Vec::new();
 
+            // BUG-013 FIX: Handle DeepSeek Reasoner's reasoning_content field.
+            // Reasoner puts extended thinking in reasoning_content and may leave
+            // content empty. We must capture reasoning_content as a Thinking block
+            // and fall back to it if content is empty.
+            if let Some(ref reasoning) = choice.message.reasoning_content {
+                if !reasoning.is_empty() {
+                    content.push(ContentBlock::Thinking {
+                        thinking: reasoning.clone(),
+                    });
+                }
+            }
+
             if let Some(text) = choice.message.content {
                 if !text.is_empty() {
                     content.push(ContentBlock::Text { text });
+                }
+            }
+
+            // If content is still empty but we had reasoning, synthesize a text
+            // block from the last portion of reasoning so the response isn't empty
+            if content.iter().all(|b| matches!(b, ContentBlock::Thinking { .. })) {
+                if let Some(reasoning) = &choice.message.reasoning_content {
+                    if !reasoning.is_empty() {
+                        // Extract the conclusion from reasoning (last 500 chars or full if shorter)
+                        let conclusion = if reasoning.len() > 500 {
+                            &reasoning[reasoning.len() - 500..]
+                        } else {
+                            reasoning.as_str()
+                        };
+                        content.push(ContentBlock::Text {
+                            text: conclusion.to_string(),
+                        });
+                    }
                 }
             }
 
@@ -670,6 +703,8 @@ impl LlmDriver for OpenAIDriver {
             // Parse the SSE stream
             let mut buffer = String::new();
             let mut text_content = String::new();
+            // BUG-013 FIX: Track reasoning_content from DeepSeek Reasoner streaming
+            let mut reasoning_content = String::new();
             // Track tool calls: index -> (id, name, arguments)
             let mut tool_accum: Vec<(String, String, String)> = Vec::new();
             let mut finish_reason: Option<String> = None;
@@ -720,6 +755,13 @@ impl LlmDriver for OpenAIDriver {
 
                     for choice in choices {
                         let delta = &choice["delta"];
+
+                        // BUG-013 FIX: Capture reasoning_content delta (DeepSeek Reasoner)
+                        if let Some(reasoning) = delta["reasoning_content"].as_str() {
+                            if !reasoning.is_empty() {
+                                reasoning_content.push_str(reasoning);
+                            }
+                        }
 
                         // Text content delta
                         if let Some(text) = delta["content"].as_str() {
@@ -787,8 +829,28 @@ impl LlmDriver for OpenAIDriver {
             let mut content = Vec::new();
             let mut tool_calls = Vec::new();
 
+            // BUG-013 FIX: Include reasoning_content as Thinking block (streaming)
+            if !reasoning_content.is_empty() {
+                content.push(ContentBlock::Thinking {
+                    thinking: reasoning_content.clone(),
+                });
+            }
+
             if !text_content.is_empty() {
                 content.push(ContentBlock::Text { text: text_content });
+            }
+
+            // BUG-013 FIX: If text_content is empty but we have reasoning, use
+            // the tail of reasoning as the text response so it's not empty
+            if text_content.is_empty() && !reasoning_content.is_empty() {
+                let conclusion = if reasoning_content.len() > 500 {
+                    &reasoning_content[reasoning_content.len() - 500..]
+                } else {
+                    reasoning_content.as_str()
+                };
+                content.push(ContentBlock::Text {
+                    text: conclusion.to_string(),
+                });
             }
 
             for (id, name, arguments) in &tool_accum {
