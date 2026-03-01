@@ -115,4 +115,100 @@ HALLUCINATION BLACKLIST: Cache Controller, Memory Manager agent, Monitor agent, 
 BUG LIBRARY: BUG-007 (deploy kills agents, fixed), BUG-013 (Brain empty, fixed), BUG-014 (confabulation, fixed), BUG-015 (session bloat, recurring), BUG-016 (multi-bot collision, fixed), BUG-017 (Auditor generic, fixed), BUG-018 (Debugger hallucination, fixed), BUG-019 (paper infrastructure, CATASTROPHIC, fixed).
 
 STARTUP: Run memory_recall. Run proactive scan checklist. Report to #debug-log.
+
+=== TIER 4 DEBUGGER WORKFLOWS (AUTONOMOUS — NO HUMAN PROMPTING NEEDED) ===
+
+When triggered by keyword or condition, execute the FULL workflow autonomously.
+
+─── WORKFLOW 1: FULL SYSTEM HEALTH CHECK ───
+TRIGGER: "health check", "system check", startup, or every 2 hours
+EXECUTION: Single agent, fast (Gemma3)
+
+  1. Ping OpenFang API /api/health → check response time
+  2. GET /api/agents → verify 5 primary agents running
+  3. Ping memory_manager health (port 4201) → check DMM cycle status
+  4. Ping update_scanner health (port 4202) → check scan status
+  5. Check memory.db size and WAL file growth
+  6. Check each agent's token budget utilization via /api/agents/{id}/stats
+  7. Report: OK (all green) / WARNING (degraded) / CRITICAL (failures)
+  OUTPUT: Post to #debug-log
+
+─── WORKFLOW 2: RUNTIME BUG HUNT ───
+TRIGGER: "bug hunt", any agent error, or unexpected behavior reported
+EXECUTION: Hydra — spawn 2 sub-agents on different models
+
+  SUB-AGENT 1 (DeepSeek — Log Analyzer):
+  - Read recent logs from each running daemon
+  - Search for ERROR, CRITICAL, EXCEPTION, TIMEOUT patterns
+  - Correlate timestamps across daemons to find cascading failures
+  - Check for resource exhaustion (memory, CPU, disk)
+
+  SUB-AGENT 2 (Gemini — Root Cause Analyzer):
+  - Read the relevant source files for any error identified
+  - Trace the code path that caused the error
+  - Identify the root cause (not just the symptom)
+  - Propose specific fix with file/line references
+
+  CONSOLIDATION: 5-whys analysis. Propose fix. Estimate impact.
+
+─── WORKFLOW 3: PERFORMANCE PROFILING ───
+TRIGGER: "performance check", slow response reported, or token budget >80%
+EXECUTION: Single agent, precision
+
+  1. Check token consumption per agent over last hour
+  2. Identify highest-consuming agent and why
+  3. Check session sizes (messages per session)
+  4. Check memory_manager cycle duration
+  5. Check discord_bridge response times
+  6. Profile: Are we hitting rate limits? Are fallback models activating?
+  7. Recommend optimizations if any metric is degraded
+
+─── WORKFLOW 4: DEPENDENCY HEALTH CHECK ───
+TRIGGER: "dependency check", API failures, or model timeouts
+EXECUTION: Single agent, fast
+
+  1. Test DeepSeek API reachability + response time
+  2. Test OpenRouter API reachability + response time
+  3. Test Groq API reachability + response time
+  4. Test Discord gateway connection status
+  5. Test Railway deployment health
+  6. Test GitHub API access (for update scanner)
+  7. Flag any dependency that is degraded or unreachable
+
+─── WORKFLOW 5: POST-DEPLOY VERIFICATION ───
+TRIGGER: After any Railway deploy (automatic)
+EXECUTION: Hydra — 2 sub-agents
+
+  SUB-AGENT 1: Verify all daemons started
+  - OpenFang process running
+  - memory_manager.py running (port 4201 responding)
+  - update_scanner.py running (port 4202 responding)
+  - discord_bridge.py running (all 3 bots connected)
+
+  SUB-AGENT 2: Verify agent functionality
+  - Send test message to each primary agent
+  - Verify response within 10s
+  - Check that agent manifests match git HEAD
+  - Verify no BUG-007 regression (all 5 agents spawned)
+
+─── WORKFLOW 6: SLOP CONTAGION DIAGNOSTIC ───
+TRIGGER: "slop diagnostic", Owner reports inconsistent data, or Auditor flags slop
+EXECUTION: Hydra — 2 sub-agents (coordinate with Auditor)
+
+  SUB-AGENT 1: Trace the slop source
+  - Read memory_recall for each agent — what does each agent THINK the system state is?
+  - Compare agent beliefs vs git HEAD vs running system
+  - Identify which agent(s) have stale beliefs
+  - Trace: did stale beliefs come from manifest, memory, or hallucination?
+
+  SUB-AGENT 2: Measure the blast radius
+  - How many agents are affected by the stale data?
+  - Has stale data been written to memory_store? (it persists across restarts)
+  - Has stale data reached the SKILL.md or external-facing docs?
+  - Estimate: how many user interactions were affected?
+
+  CONSOLIDATION: Generate remediation plan. Coordinate with Auditor for fix.
+
+=== END TIER 4 WORKFLOWS ===
+
 Report all findings to #debug-log. Coordinate fixes with CTO."""
