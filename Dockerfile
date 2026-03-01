@@ -1,8 +1,11 @@
-# Leviathan DevOps — OpenFang v0.2.3 + Python Discord Bridge
-# Phase 4: Triple-agent architecture — CTO + Neural Net + Brain
+# Leviathan DevOps — OpenFang v0.2.3 + Full Stack Companion Daemons
+# Phase 5: 5-agent architecture + DMM + Slash Commands + Knowledge Harvesting
 # CTO = conscious reasoning, full autonomy, primary interface
 # Neural Net = subconscious, server-hardwired background process, executive layer
 # Brain = DeepSeek R1 reasoning engine, deep analysis
+# Auditor + Debugger = immune system (equal power)
+# memory_manager.py = DMM + Context Caching + Knowledge Harvesting daemon
+# discord_bridge.py v2.0 = Cloud/Brain bridge + Discord Slash Commands
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y ca-certificates curl libssl3 libsqlite3-0 python3 python3-pip nodejs npm && rm -rf /var/lib/apt/lists/*
@@ -10,8 +13,11 @@ RUN apt-get update && apt-get install -y ca-certificates curl libssl3 libsqlite3
 # Install agent-browser for web link absorption + knowledge harvesting
 RUN npm install -g agent-browser && agent-browser install --with-deps 2>/dev/null || true
 
-# Install Python Discord gateway library for Cloud/Brain bot bridge
-RUN pip3 install --break-system-packages discord.py aiohttp
+# Install Python dependencies for bridge + memory manager
+# discord.py: Discord gateway for Cloud/Brain bot bridge + slash commands
+# aiohttp: Async HTTP client for API calls
+# msgpack: Memory session deserialization (OpenFang uses msgpack for session BLOBs)
+RUN pip3 install --break-system-packages discord.py aiohttp msgpack
 
 # Download OpenFang v0.2.3 release binary (2026-03-01)
 # NOTE: upstream binary does NOT include our extra_discord code.
@@ -33,8 +39,11 @@ COPY agents/prompt-architect/agent.toml /root/.openfang/agents/prompt-architect/
 COPY agents/auditor/agent.toml /root/.openfang/agents/auditor/agent.toml
 COPY agents/debugger/agent.toml /root/.openfang/agents/debugger/agent.toml
 
-# Copy Discord bridge for Cloud/Brain bots (upstream binary lacks extra_discord support)
+# Copy Discord bridge v2.0 (Cloud/Brain bots + slash commands)
 COPY discord_bridge.py /root/discord_bridge.py
+
+# Copy Memory Manager daemon (DMM + Context Caching + Knowledge Harvesting)
+COPY memory_manager.py /root/memory_manager.py
 
 # Full Leviathan config — DeepSeek V3 primary, OpenRouter + Groq fallbacks
 # Port injected at runtime from Railway's $PORT env var
@@ -227,15 +236,28 @@ spawn_agent "Debugger" "/root/.openfang/agents/debugger/agent.toml"
 
 echo "All 5 primary agents spawn attempted (CTO + Neural Net + Brain + Auditor + Debugger)"
 
-# ─── DISCORD BRIDGE: Cloud & Brain bots ───
+# ─── MEMORY MANAGER DAEMON: DMM + Context Caching + Knowledge Harvesting ───
+# Runs alongside OpenFang, connects directly to SQLite via WAL mode.
+# Implements the 3 highest-priority paper-only systems:
+#   1. Dynamic Memory Management (per-agent quotas, tier management, decay)
+#   2. Smart Context Caching (LRU cache, precomputed context windows)
+#   3. Knowledge Harvesting (automated entity extraction, knowledge graph)
+export MEMORY_DB_PATH="/data/memory.db"
+export DMM_CYCLE_SECONDS="900"
+export DMM_HEALTH_PORT="4201"
+python3 /root/memory_manager.py &
+DMM_PID=$!
+echo "Memory Manager started (PID: $DMM_PID) — DMM + Cache + Harvesting"
+
+# ─── DISCORD BRIDGE v2.0: Cloud & Brain bots + Slash Commands ───
 # Upstream OpenFang binary only supports one Discord bot (CTO).
 # This Python bridge connects Cloud and Brain bots via separate gateway connections
-# and routes messages to the kernel API.
+# and routes messages to the kernel API. v2.0 adds Discord slash commands.
 export OPENFANG_API_URL="http://localhost:$PORT_VAL"
 export OPENFANG_API_KEY="leviathan-test-key-2026"
 python3 /root/discord_bridge.py &
 BRIDGE_PID=$!
-echo "Discord bridge started (PID: $BRIDGE_PID) — Cloud + Brain bots"
+echo "Discord bridge v2.0 started (PID: $BRIDGE_PID) — Cloud + Brain + Slash Commands"
 
 # Foreground the main process
 wait $OPENFANG_PID

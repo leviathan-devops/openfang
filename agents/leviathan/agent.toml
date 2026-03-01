@@ -45,25 +45,33 @@ SUB-AGENTS (spawned for specific tasks, NOT primary):
 - Sub-agents execute LINEARLY (this is expected and correct)
 
 NEURAL NET SUB-PROCESSES:
-=== IMPLEMENTED (in Rust code, verified) ===
-8. Session Compaction — Summarizes when >30 messages. IMPLEMENTED in session.rs.
-16. Common Sense Enforcement — Tier 0. Monitors for paper architecture anti-pattern. IMPLEMENTED in agent.toml manifests.
+=== IMPLEMENTED ===
+1. Session Compaction — LLM-summary compaction when >100 messages. IMPLEMENTED.
+2. Common Sense Enforcement — Tier 0 rules. IMPLEMENTED in agent.toml manifests.
+3. Dynamic Memory Management (DMM) — IMPLEMENTED in memory_manager.py daemon.
+   - Per-agent quotas (10K memories max)
+   - 3-tier management: T1 hot / T2 warm / T3 cold
+   - Access-based promotion/demotion
+   - Confidence decay (5% per cycle, 7-day threshold)
+   - Cold tier pruning (30-day cutoff)
+4. Smart Context Caching — IMPLEMENTED in memory_manager.py.
+   - LRU cache (50 entries per agent)
+   - Precomputed context windows
+   - Tier-aware (in-memory T1, SQLite T2)
+5. Knowledge Harvesting — IMPLEMENTED in memory_manager.py.
+   - Entity extraction (URLs, repos, code refs, named entities, tech terms)
+   - Relation extraction (co-occurrence)
+   - Knowledge graph population (entities + relations tables)
+   - 15-minute harvest cycles
+6. Discord Slash Commands — IMPLEMENTED in discord_bridge.py v2.0.
+   - /status, /agent, /memory, /compact, /tasks, /spawn, /lev-help
 
-=== DESIGNED (in agent.toml specs, NOT yet coded in Rust) ===
-1. Leviathan Vision — Token mapping microsystem. DESIGNED. NOT yet coded. Target: discord.rs.
-2. Context Caching — 3-tier memory concept (semantic/structured/knowledge stores exist in Rust, tier enforcement NOT coded).
-3. Token Caching — Provider cache concept. Individual caches exist. Unified replication NOT coded.
-4. Dynamic Memory Management — Macro orchestrator concept. NOT coded. Needs kernel implementation.
-5. One-way Context Spillover — CTO/Neural Net → Auditor. DESIGNED, not enforced in code.
-6. Auditor Persistent Memory — DESIGNED via memory_recall tool, not automated.
-7. Knowledge Harvesting — DESIGNED. No automated 12-hour cycles coded.
-9. Memory Backup/Restore — DESIGNED. Not implemented.
-10. Bi-weekly COLD Tier Pruning — DESIGNED. Not implemented.
-11. Context Token Generation — DESIGNED. Not implemented.
-12. Tier Swapping — DESIGNED. Not implemented.
-13. Agent State Monitoring — PARTIAL. Token budget tracking implemented (commit a5e6f53). Full health monitoring not coded.
-14. Scribe Process — DESIGNED. Not automated.
-15. Knowledge Graph Expansion — Knowledge graph structure EXISTS in knowledge.rs. Automated expansion NOT coded.
+=== DESIGNED (NOT YET CODED) ===
+1. Leviathan Vision — Token mapping microsystem. Target: discord.rs or Python companion.
+2. Token Caching — Provider cache unification. Individual caches exist.
+3. One-way Context Spillover — CTO/Neural Net → Auditor flow.
+4. Scribe Process — Automated logging to #daily-logs.
+5. Memory Backup/Restore — Automated verified backups (partial: boot backup exists).
 
 SYSTEMS THAT DO NOT EXIST (never reference these):
 Cache Controller, Memory Manager, Monitor agent, Security Sentinel, Billing Engine, Customer Interface, API Gateway, Data Pipeline, Training Supervisor, CEO agent.
