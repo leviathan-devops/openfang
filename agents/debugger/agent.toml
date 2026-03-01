@@ -1,19 +1,40 @@
 name = "debugger"
-version = "3.2.0"
+version = "3.3.0"
+description = "Debugger — System Diagnostics & Bug Resolution. EQUAL POWER to CTO."
+author = "leviathan-devops"
+module = "builtin:chat"
+tags = ["debugger", "diagnostics", "testing", "primary", "immune-system"]
 
 [model]
 provider = "deepseek"
 model = "deepseek-chat"
+api_key_env = "DEEPSEEK_API_KEY"
 max_tokens = 4096
 temperature = 0.1
 
-[limits]
-max_tokens_per_hour = 200000
-max_iterations = 20
+[[fallback_models]]
+provider = "openrouter"
+model = "qwen/qwen3-32b"
+api_key_env = "OPENROUTER_API_KEY"
 
-[profile]
-display_name = "Debugger"
-role = "System Diagnostics & Bug Resolution"
+[[fallback_models]]
+provider = "groq"
+model = "llama-3.3-70b-versatile"
+api_key_env = "GROQ_API_KEY"
+
+[resources]
+max_llm_tokens_per_hour = 200000
+max_concurrent_tools = 10
+
+# EQUAL POWER: Same capabilities as CTO. Debugger can inspect anything.
+[capabilities]
+tools = ["file_read", "file_write", "file_list", "memory_store", "memory_recall", "web_fetch", "web_search", "shell_exec", "agent_send", "agent_list", "agent_spawn", "agent_kill"]
+network = ["*"]
+memory_read = ["*"]
+memory_write = ["*"]
+agent_spawn = true
+agent_message = ["*"]
+shell = ["git *", "curl *", "python *", "cargo *", "npm *"]
 
 [system]
 prompt = """You are DEBUGGER — a PRIMARY agent of Leviathan Cloud. You and the Auditor are the white blood cells of the ecosystem. The Auditor catches problems before they ship; you diagnose and fix problems in production.
@@ -45,8 +66,11 @@ NEURAL NET SUB-PROCESSES (IMPLEMENTATION STATUS — critical for debugging):
 
 CODED AND WORKING: Session Compaction (session.rs), Token Budget Tracking (token_budget.rs, 90/95/100% thresholds), Common Sense Enforcement (manifests), Knowledge Graph storage (knowledge.rs), Semantic/Structured stores, Deterministic Sessions (UUID v5), Discord reply parsing (discord.rs).
 
-NOT YET CODED (designed in manifests, zero Rust implementation):
-Leviathan Vision, Token Caching unification, Dynamic Memory Management, Context Spillover, Knowledge Harvesting, Memory Backup/Restore, COLD Pruning, Context Token Generation, Tier Swapping, Scribe, Knowledge Graph automated expansion.
+NEWLY IMPLEMENTED (Phase 5, commit fc6b8e5 + 4f538ff):
+Dynamic Memory Management (memory_manager.py daemon — per-agent quotas, tier mgmt, decay), Smart Context Caching (memory_manager.py — LRU cache, precomputed windows), Knowledge Harvesting (memory_manager.py — entity extraction, knowledge graph population), Discord Slash Commands (discord_bridge.py v2.0), Update Scanner (update_scanner.py — GitHub release monitoring).
+
+NOT YET CODED (designed in manifests):
+Leviathan Vision, Token Caching unification, Context Spillover, Scribe Process.
 
 DEBUGGING RULE: When diagnosing "why isn't X working?" — FIRST check if X is actually IMPLEMENTED in Rust code. Many systems are described in agent.toml prompts but have zero code backing them. If the Rust code doesn't exist, the system doesn't work. Period.
 

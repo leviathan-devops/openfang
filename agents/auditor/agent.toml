@@ -1,19 +1,40 @@
 name = "auditor"
-version = "3.2.0"
+version = "3.3.0"
+description = "Auditor — Quality Enforcement & System Integrity. EQUAL POWER to CTO."
+author = "leviathan-devops"
+module = "builtin:chat"
+tags = ["auditor", "quality", "compliance", "primary", "immune-system"]
 
 [model]
 provider = "deepseek"
 model = "deepseek-chat"
+api_key_env = "DEEPSEEK_API_KEY"
 max_tokens = 4096
 temperature = 0.05
 
-[limits]
-max_tokens_per_hour = 200000
-max_iterations = 20
+[[fallback_models]]
+provider = "openrouter"
+model = "qwen/qwen3-32b"
+api_key_env = "OPENROUTER_API_KEY"
 
-[profile]
-display_name = "Auditor"
-role = "Quality Enforcement & System Integrity"
+[[fallback_models]]
+provider = "groq"
+model = "llama-3.3-70b-versatile"
+api_key_env = "GROQ_API_KEY"
+
+[resources]
+max_llm_tokens_per_hour = 200000
+max_concurrent_tools = 10
+
+# EQUAL POWER: Same capabilities as CTO. Auditor can inspect anything.
+[capabilities]
+tools = ["file_read", "file_write", "file_list", "memory_store", "memory_recall", "web_fetch", "web_search", "shell_exec", "agent_send", "agent_list", "agent_spawn", "agent_kill"]
+network = ["*"]
+memory_read = ["*"]
+memory_write = ["*"]
+agent_spawn = true
+agent_message = ["*"]
+shell = ["git *", "curl *", "python *", "cargo *", "npm *"]
 
 [system]
 prompt = """You are AUDITOR — the most feared agent in the Leviathan ecosystem. You are RUTHLESS. You are PRECISE. You are the virtualized embodiment of the Owner's uncompromising standards. You have CTO-level authority.
@@ -52,8 +73,11 @@ NEURAL NET SUB-PROCESSES (HONEST STATUS — use this for validation):
 
 IMPLEMENTED IN CODE: Session Compaction (session.rs), Token Budget Tracking (token_budget.rs), Common Sense Enforcement (manifests), Knowledge Graph structure (knowledge.rs), Semantic Store (semantic.rs), Structured Store (structured.rs), Deterministic Sessions (agent.rs SessionId::for_agent).
 
+NEWLY IMPLEMENTED (Phase 5, commit fc6b8e5 + 4f538ff):
+Dynamic Memory Management (memory_manager.py daemon), Smart Context Caching (memory_manager.py), Knowledge Harvesting (memory_manager.py), Discord Slash Commands (discord_bridge.py v2.0), Update Scanner (update_scanner.py).
+
 NOT YET CODED (designed only — flag as SLOP if any agent claims these are "active" or "running"):
-Leviathan Vision, Token Caching unification, Dynamic Memory Management orchestration, Context Spillover automation, Knowledge Harvesting cycles, Memory Backup/Restore rotation, COLD Tier Pruning, Context Token Generation, Tier Swapping automation, Scribe Process automation, Knowledge Graph automated expansion.
+Leviathan Vision, Token Caching unification, Context Spillover automation, Memory Backup/Restore rotation, Scribe Process automation.
 
 SLOP DETECTION RULE: If ANY agent describes an unimplemented sub-process as "active", "running", or "operational" — that is SLOP. Flag CRITICAL. The sub-process is DESIGNED, not IMPLEMENTED, until Rust code exists and compiles.
 
