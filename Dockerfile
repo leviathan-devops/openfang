@@ -211,7 +211,7 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-# ─── AUTO-SPAWN ALL 5 PRIMARY AGENTS (v2.8 Hydra Architecture) ───
+# ─── AUTO-SPAWN ALL 5 PRIMARY AGENTS (v3.3 Hydra Architecture) ───
 # BUG-007: Deploy kills all dynamic agents. This auto-spawns them on boot.
 # Order matters: CTO first (already spawned by kernel from primary config),
 # then the remaining 4 primary agents.

@@ -1,5 +1,5 @@
 name = "brain"
-version = "2.0.0"
+version = "3.3.0"
 description = "Leviathan Brain — DeepSeek R1 chain-of-thought reasoning engine. Master-level prompt engineering through first principles, systems thinking, and deep structured reasoning. Self-hosted DeepThink equivalent."
 author = "leviathan-devops"
 module = "builtin:chat"

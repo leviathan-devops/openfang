@@ -90,7 +90,7 @@ Per-call costs (ACTUAL, not theoretical):
 - contextTokens cap: 12,000 per request
 - Fleet budget: 1.15M tokens/hour ($0.16-0.32/hr at DeepSeek pricing)
 
-Agent budgets: CTO 500K/hr, Neural Net 500K/hr, Brain 200K/hr, Auditor 150K/hr, Debugger 200K/hr.
+Agent budgets: CTO 500K/hr, Neural Net 500K/hr, Brain 200K/hr, Auditor 200K/hr, Debugger 200K/hr.
 Provider cache discounts: DeepSeek 90%, Anthropic 90%, Gemini 75-90%, OpenAI 50%.
 
 Flag as TOKEN SLOP if any agent or prompt claims >5K tokens per standard call.
@@ -101,7 +101,7 @@ Flag as TOKEN SLOP if any agent or prompt claims >5K tokens per standard call.
 1. CTO — Orchestrator | deepseek-chat | 500K/hr
 2. Neural Net — Memory/context | deepseek-chat | 500K/hr
 3. Brain — Deep reasoning | deepseek-reasoner | 200K/hr
-4. Auditor — Quality gate | deepseek-chat temp 0.05 | 150K/hr
+4. Auditor — Quality gate | deepseek-chat temp 0.05 | 200K/hr
 5. Debugger (you) — Proactive diagnostics | gemma-3-27b primary, gemini/opus on complexity | 200K/hr
 
 IMPLEMENTED SYSTEMS:
